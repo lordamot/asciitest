@@ -1,0 +1,86 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #07080d;
+  color: #c8ccd4;
+  font-family: 'Cascadia Mono', 'Fira Code', 'Consolas', 'Menlo', monospace;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#frame {
+  position: relative;
+  border: 1px solid #1f2330;
+  box-shadow:
+    0 0 0 1px #0b0c12 inset,
+    0 0 60px rgba(80, 200, 255, 0.12),
+    0 0 4px rgba(255, 215, 0, 0.25);
+  background: #04050a;
+  padding: 6px 6px 0 6px;
+  border-radius: 4px;
+}
+
+#hud {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  padding: 4px 8px 6px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: #7c8a9e;
+}
+.hud-title { color: #ffd56b; font-weight: bold; text-shadow: 0 0 8px rgba(255,213,107,0.6); }
+.hud-sep   { color: #2a3142; }
+.hud-label { color: #9aa6b8; }
+.hud-key {
+  color: #d8e3f0;
+  background: #131826;
+  border: 1px solid #28304a;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+#sndBtn { cursor: pointer; }
+#sndBtn:hover { color: #ffd56b; border-color: #5a4a14; }
+
+#game {
+  display: block;
+  background: #04050a;
+  image-rendering: pixelated;
+}
+
+#overlay {
+  position: absolute;
+  inset: 36px 6px 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(4,5,10,0.78);
+  backdrop-filter: blur(2px);
+  text-align: center;
+  cursor: pointer;
+}
+#overlay.hidden { display: none; }
+#overlayText {
+  font-size: 32px;
+  color: #ffd56b;
+  letter-spacing: 0.2em;
+  text-shadow: 0 0 12px rgba(255,213,107,0.6), 0 0 30px rgba(255,140,0,0.35);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+#overlaySub {
+  font-size: 14px;
+  color: #8da0b8;
+  letter-spacing: 0.15em;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1; }
+}

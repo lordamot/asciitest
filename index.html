@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ASCII QUEST — The Golden Key</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="frame">
+    <div id="hud">
+      <span class="hud-title">ASCII&nbsp;QUEST</span>
+      <span class="hud-sep">|</span>
+      <span class="hud-label">MOVE</span> <span class="hud-key">&larr;</span><span class="hud-key">&rarr;</span>
+      <span class="hud-sep">|</span>
+      <span class="hud-label">JUMP</span> <span class="hud-key">SPACE</span>
+      <span class="hud-sep">|</span>
+      <span class="hud-label">SIT</span> <span class="hud-key">&darr;</span>
+      <span class="hud-sep">|</span>
+      <span class="hud-label">CLIMB</span> <span class="hud-key">&uarr;</span><span class="hud-key">&darr;</span>
+      <span class="hud-sep">|</span>
+      <span class="hud-label">SOUND</span> <span class="hud-key" id="sndBtn">ON</span>
+    </div>
+    <canvas id="game" width="1000" height="612"></canvas>
+    <div id="overlay">
+      <div id="overlayText">CLICK&nbsp;TO&nbsp;START</div>
+      <div id="overlaySub">Grab the golden key at the top!</div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
