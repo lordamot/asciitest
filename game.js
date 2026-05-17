@@ -364,6 +364,7 @@
     }
 
     spawnEnemiesForScreen(n);
+    setMusicForScreen(n);
   }
 
   function advanceScreen() {
@@ -658,6 +659,8 @@
     4: '#1a1a22',   // snow: stark ravens
   };
   const BIRD_FRAMES = ['/V\\', '_v_'];
+  // Drifting leaves shed from trees.  Per-tree rate is tied to wind phase.
+  const TREE_LEAVES = [];
 
   const FIREFLIES = [];
   for (let i = 0; i < 16; i++) {
@@ -920,26 +923,43 @@
     '   ╳       ╳       ╳       ╳       ╳       ╳       ╳       ╳  ',
   ];
 
-  // Tree sprites
+  // Tree sprites — taller (10 rows) for the high-res grid.
+  // Last 3 rows are trunk and never sway.
   const TREE_PINE = [
-    '   ▲   ',
-    '  ▲▲▲  ',
-    ' ▲▲▲▲▲ ',
-    '▲▲▲▲▲▲▲',
-    '   ║   ',
-    '   ║   ',
+    '    ▲    ',
+    '   ▲▲▲   ',
+    '  ▲▲▲▲▲  ',
+    '   ▲▲▲   ',
+    '  ▲▲▲▲▲  ',
+    ' ▲▲▲▲▲▲▲ ',
+    '▲▲▲▲▲▲▲▲▲',
+    '   ║║║   ',
+    '   ║║║   ',
+    '   ║║║   ',
   ];
-  const TREE_PINE_COLORS = ['#3ea65a', '#3ea65a', '#2f8e4a', '#256f3a', '#7a4a22', '#7a4a22'];
+  const TREE_PINE_COLORS = [
+    '#5fbf7a', '#4eb070', '#3ea65a',
+    '#4eb070', '#3ea65a', '#2f8e4a', '#256f3a',
+    '#7a4a22', '#7a4a22', '#5a3a18',
+  ];
 
   const TREE_ROUND = [
-    '  ╭▒▓╮  ',
-    ' ▓▓▓▓▓▓ ',
-    '▓▓▒▓▓▓▒▓',
-    ' ▓▒▓▓▓▒ ',
-    '   ║║   ',
-    '   ║║   ',
+    '   ╭▒▓╮  ',
+    '  ▓▓▓▓▓▓ ',
+    ' ▓▒▓▓▓▒▓ ',
+    '▓▓▒▓▓▓▒▓▓',
+    ' ▓▓▒▓▓▓▒ ',
+    '  ▓▓▓▓▓  ',
+    '   ▓▓▓   ',
+    '   ║║║   ',
+    '   ║║║   ',
+    '   ║║║   ',
   ];
-  const TREE_ROUND_COLORS = ['#4ec46f', '#3ea65a', '#3ea65a', '#2f8e4a', '#7a4a22', '#5a3a18'];
+  const TREE_ROUND_COLORS = [
+    '#5fd47e', '#4ec46f', '#3ea65a', '#3ea65a',
+    '#3ea65a', '#2f8e4a', '#256f3a',
+    '#7a4a22', '#7a4a22', '#5a3a18',
+  ];
 
   const BUSH = [
     ' ░▒░ ',
@@ -1115,6 +1135,55 @@
       if (b.x < -6 || b.x > COLS + 6) BATS.splice(i, 1);
     }
   }
+  function updateTreeLeaves(dt) {
+    if (!TREES || !TREES.length) return;
+    // Spawn rate scales with wind; capped to keep CPU happy.
+    if (TREE_LEAVES.length < 60 && Math.random() < dt * (1.8 + Math.abs(Math.sin(windPhase)) * 1.4)) {
+      const t = TREES[Math.floor(Math.random() * TREES.length)];
+      const f = FLOORS[t.floorIdx];
+      if (!f) return;
+      const treeH = 10;
+      const topY = f.y - treeH;
+      const isSnow = t.kind === 'snow-pine';
+      const palette = isSnow ? ['#ffffff', '#dbe6f0', '#a0c0d0']
+                              : (t.kind === 'pine'
+                                 ? ['#5fbf7a', '#4ea35a', '#256f3a', '#caa040']
+                                 : ['#6fd47e', '#3ea65a', '#ffd56b', '#ff9a3a']);
+      const glyphs = isSnow ? ['*','·','˖','∗'] : ['·','\'','‧','˖','•'];
+      TREE_LEAVES.push({
+        x: t.x + (Math.random() - 0.5) * 7,
+        y: topY + Math.random() * (treeH - 3),
+        vx: (Math.random() - 0.5) * 1.6,
+        vy: 0.8 + Math.random() * 1.4,
+        phase: Math.random() * Math.PI * 2,
+        ch: glyphs[Math.floor(Math.random() * glyphs.length)],
+        color: palette[Math.floor(Math.random() * palette.length)],
+        life: 4 + Math.random() * 3,
+        age: 0,
+      });
+    }
+    for (let i = TREE_LEAVES.length - 1; i >= 0; i--) {
+      const l = TREE_LEAVES[i];
+      l.age += dt;
+      l.phase += dt * 3;
+      l.x += (l.vx + Math.sin(l.phase) * 1.2) * dt;
+      l.y += l.vy * dt;
+      // Settle once they touch a floor.
+      const f = FLOORS.find(fl => l.x >= fl.left && l.x <= fl.right && l.y + 1 >= fl.y);
+      if (f) { l.y = f.y - 1; l.vy = 0; l.vx = 0; }
+      if (l.age >= l.life) TREE_LEAVES.splice(i, 1);
+    }
+  }
+  function drawTreeLeaves() {
+    for (const l of TREE_LEAVES) {
+      const a = 1 - l.age / l.life;
+      if (a < 0.08) continue;
+      const ax = Math.floor(l.x), ay = Math.floor(l.y);
+      if (ax < 0 || ax >= COLS || ay < 0 || ay >= ROWS) continue;
+      putChar(ax, ay, l.ch, l.color);
+    }
+  }
+
   function updateBirds(dt) {
     // Cave is mostly bat territory and snow is sparse — fewer birds.
     const cap = screen === 3 ? 0 : (screen === 4 ? 2 : 4);
@@ -1148,6 +1217,7 @@
     updateFireflies(dt);
     updateBats(dt);
     updateBirds(dt);
+    updateTreeLeaves(dt);
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -1259,6 +1329,79 @@
   }
 
   // ───────────────────────────────────────────────────────────────────────
+  //  MUSIC  (per-level looping melody + bass)
+  // ───────────────────────────────────────────────────────────────────────
+  const NOTES = {
+    A1: 55.00,  C2: 65.41,  D2: 73.42,  E2: 82.41,  F2: 87.31,  G2: 98.00,  A2: 110.00, B2: 123.47,
+    C3: 130.81, D3: 146.83, Eb3:155.56, E3: 164.81, F3: 174.61, Fs3:185.00, G3: 196.00, Ab3:207.65, A3: 220.00, Bb3:233.08, B3: 246.94,
+    C4: 261.63, D4: 293.66, Eb4:311.13, E4: 329.63, F4: 349.23, Fs4:369.99, G4: 392.00, Ab4:415.30, A4: 440.00, Bb4:466.16, B4: 493.88,
+    C5: 523.25, D5: 587.33, Eb5:622.25, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, B5: 987.77,
+    REST: 0,
+  };
+  // 8-step melodies + 4-step bass per screen, repeating forever.
+  const MUSIC_TRACKS = {
+    0: { tempo: 88,  notes: ['A3','C4','E4','D4','C4','A3','E4','G4','F4','E4','D4','C4','A3','G3','C4','E4'],
+                     bass:  ['A2','A2','E2','E2','F2','F2','C3','C3'] },
+    1: { tempo: 78,  notes: ['D4','F4','A4','D5','C5','A4','F4','D4','A3','C4','E4','A4','G4','E4','C4','A3'],
+                     bass:  ['D2','D2','A2','A2','F2','F2','C3','C3'] },
+    2: { tempo: 112, notes: ['C5','E5','G5','E5','C5','E5','G5','C5','D5','F5','A5','F5','D5','F5','A5','D5'],
+                     bass:  ['C3','C3','F2','F2','G2','G2','C3','C3'] },
+    3: { tempo: 58,  notes: ['A2','REST','C3','E3','A3','REST','G3','E3','F3','REST','A3','C4','E4','REST','D4','C4'],
+                     bass:  ['A1','A1','F2','F2','C3','C3','E3','E3'] },
+    4: { tempo: 132, notes: ['E4','G4','B4','E5','D5','B4','G4','E4','F4','A4','C5','F5','E5','C5','A4','F4'],
+                     bass:  ['E2','E2','G2','G2','A2','A2','D3','D3'] },
+  };
+  let musicTrack = null;
+  let musicStep = 0, musicBassStep = 0;
+  let musicNextTime = 0, musicNextBassTime = 0;
+  let musicOn = true;          // separate from soundOn (effects)
+  const MELODY_VOL = 0.022;
+  const BASS_VOL   = 0.018;
+
+  function setMusicForScreen(n) {
+    musicTrack = MUSIC_TRACKS[n] || null;
+    musicStep = 0;
+    musicBassStep = 0;
+    musicNextTime = 0;
+    musicNextBassTime = 0;
+  }
+
+  function playMusicNote(freq, dur, vol, type) {
+    if (!freq) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.04);
+    g.gain.linearRampToValueAtTime(vol * 0.65, t + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+
+  function tickMusic() {
+    if (!musicTrack || !audioCtx) return;
+    if (!musicOn || !soundOn) return;
+    if (gameState !== 'playing' || codeInputMode) return;
+    const t = audioCtx.currentTime;
+    const beat = 60 / musicTrack.tempo;
+    if (t >= musicNextTime) {
+      playMusicNote(NOTES[musicTrack.notes[musicStep]], beat * 0.95, MELODY_VOL, 'triangle');
+      musicStep = (musicStep + 1) % musicTrack.notes.length;
+      musicNextTime = (musicNextTime === 0 ? t : musicNextTime) + beat;
+    }
+    if (musicTrack.bass && t >= musicNextBassTime) {
+      const bassBeat = beat * 2;
+      playMusicNote(NOTES[musicTrack.bass[musicBassStep]], bassBeat * 0.95, BASS_VOL, 'sine');
+      musicBassStep = (musicBassStep + 1) % musicTrack.bass.length;
+      musicNextBassTime = (musicNextBassTime === 0 ? t : musicNextBassTime) + bassBeat;
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
   //  INPUT
   // ───────────────────────────────────────────────────────────────────────
   const keys = Object.create(null);
@@ -1296,6 +1439,10 @@
       soundOn = !soundOn;
       sndBtn.textContent = soundOn ? 'ON' : 'OFF';
     }
+    if (k === 'n' || k === 'N') {
+      musicOn = !musicOn;
+      if (musBtn) musBtn.textContent = musicOn ? 'ON' : 'OFF';
+    }
     keys[k] = true;
   }, { passive: false });
   window.addEventListener('keyup', (e) => { keys[e.key] = false; });
@@ -1307,6 +1454,14 @@
     soundOn = !soundOn;
     sndBtn.textContent = soundOn ? 'ON' : 'OFF';
   });
+  const musBtn = document.getElementById('musBtn');
+  if (musBtn) {
+    musBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      musicOn = !musicOn;
+      musBtn.textContent = musicOn ? 'ON' : 'OFF';
+    });
+  }
 
   // Overlay
   const overlay = document.getElementById('overlay');
@@ -1370,6 +1525,7 @@
     SNOWFLAKES.length = 0;
     DROPS.length = 0;
     BIRDS.length = 0;
+    TREE_LEAVES.length = 0;
     loadScreen(0);
   }
   loadScreen(0);
@@ -2652,24 +2808,41 @@
   }
 
   // Snowy pine: same shape, white-ish foliage with hints of green.
-  const TREE_SNOW_PINE_COLORS = ['#eaf0f8', '#dbe6f0', '#9ec3ad', '#6f9d7e', '#7a4a22', '#7a4a22'];
+  // 10 colour entries to match the taller pine sprite (7 canopy + 3 trunk).
+  const TREE_SNOW_PINE_COLORS = [
+    '#ffffff', '#eaf0f8', '#dbe6f0',
+    '#eaf0f8', '#dbe6f0', '#9ec3ad', '#6f9d7e',
+    '#7a4a22', '#7a4a22', '#5a3a18',
+  ];
 
   function drawTree(t) {
-    const y = FLOORS[t.floorIdx].y - 6;
     const isSnowPine = t.kind === 'snow-pine';
     const sprite = (t.kind === 'pine' || isSnowPine) ? TREE_PINE : TREE_ROUND;
     const colors = isSnowPine ? TREE_SNOW_PINE_COLORS
                               : (t.kind === 'pine' ? TREE_PINE_COLORS : TREE_ROUND_COLORS);
-    // Top of the tree sways with the wind; trunk stays put.
-    const sway = Math.sin(windPhase + t.x * 0.35) * 0.6;
-    for (let r = 0; r < sprite.length; r++) {
-      const isCanopy = r < 4;
-      const dx = isCanopy ? Math.round(sway * (1 - r * 0.25)) : 0;
-      putString(t.x - 3 + dx, y + r, sprite[r], colors[r]);
+    const height = sprite.length;
+    const y = FLOORS[t.floorIdx].y - height;
+    // Wind sway — top of the canopy moves further than the bottom; trunk
+    // stays put.  Layer-specific phase offset adds a "leafy shimmer" feel.
+    const trunkRows = 3;
+    const canopyH = height - trunkRows;
+    const swayBase = Math.sin(windPhase + t.x * 0.35);
+    for (let r = 0; r < height; r++) {
+      const canopyDepth = canopyH - r;       // positive in canopy
+      const dx = canopyDepth > 0
+        ? Math.round((swayBase + Math.sin(windPhase * 1.4 + r * 0.5) * 0.3)
+                     * (canopyDepth / canopyH) * 1.2)
+        : 0;
+      // Width of the sprite is sprite[r].length; centre it around t.x.
+      const left = t.x - ((sprite[r].length - 1) >> 1);
+      putString(left + dx, y + r, sprite[r], colors[r] || colors[colors.length - 1]);
     }
-    // Cap with a little snow if it's a snow pine.
-    if (isSnowPine) {
-      putChar(t.x, y - 1, '·', '#ffffff');
+    // Snow cap on the snow-pine's tip.
+    if (isSnowPine) putChar(t.x, y - 1, '·', '#ffffff');
+    // Occasional birds perch in the canopy of larger trees.
+    if (t.bird) {
+      const lit = (((windPhase * 2 + t.x) | 0) % 4) === 0;
+      putChar(t.x + 1, y + 1, lit ? 'v' : '^', '#ffd56b');
     }
   }
   function drawBush(b) {
@@ -2996,6 +3169,7 @@
 
     // Foreground world
     for (const t of TREES) drawTree(t);
+    drawTreeLeaves();
     drawFloors();
     drawLadders();
     if (screen === 1) drawRope(time);
@@ -3054,7 +3228,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c0';
+    const v = 'c1';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
@@ -3066,6 +3240,7 @@
     const dt = Math.min(0.04, (now - lastTime) / 1000);
     lastTime = now;
     update(dt);
+    tickMusic();
     draw(now / 1000);
     requestAnimationFrame(loop);
   }
