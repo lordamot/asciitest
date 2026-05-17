@@ -1141,7 +1141,7 @@
     // Cull dead enemies whose fade-out finished.
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
-      if (e.hp <= 0 && e.dead <= 0) enemies.splice(i, 1);
+      if (e.hp <= 0 && e.dead <= 0.2) enemies.splice(i, 1);
     }
   }
 
@@ -1164,12 +1164,14 @@
           enemyHitSound();
           spawnParticles(e.x + e.w / 2, e.y + e.h / 2, { count: 8, colors: ['#ffe69a','#ff9a3a','#ffffff'], chars: ['*','+','✦'] });
           if (e.hp <= 0) {
-            e.dead = 0.45;
+            e.dead = 0.35;
             enemyDieSound();
+            const deathColor = e.type === 'ghost' ? ['#9fb8e0','#dfeaff','#ffffff']
+                              : e.type === 'slime' ? ['#4ec46f','#3ea65a','#ffd56b','#ffffff']
+                              : ['#e6e8ee','#b8bcc4','#ff6464','#ffffff'];
             spawnParticles(e.x + e.w / 2, e.y + e.h / 2, {
-              count: 18,
-              colors: e.type === 'ghost' ? ['#9fb8e0','#dfeaff','#ffffff'] : ['#3ea65a','#ffd56b','#ffffff'],
-              chars: ['*','·','✦','+'],
+              count: 36, colors: deathColor,
+              chars: ['*','·','✦','+','✧','×'],
             });
           }
         }
@@ -1489,11 +1491,9 @@
       for (let r = 0; r < sprite.length; r++) putString(px, py + r, sprite[r], colors[r] || colors[colors.length - 1]);
       ctx.globalAlpha = 1;
     }
-    // Tiny HP pip above multi-HP enemies
-    if (e.maxHp > 1) {
-      for (let i = 0; i < e.maxHp; i++) {
-        putChar(px + i, py - 1, i < e.hp ? '▮' : '▯', '#ff6464');
-      }
+    // Tiny HP pip above every enemy
+    for (let i = 0; i < e.maxHp; i++) {
+      putChar(px + i, py - 1, i < e.hp ? '▮' : '▯', '#ff6464');
     }
   }
 
@@ -1736,6 +1736,9 @@
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
+    // Build marker (lets you confirm cache-busting worked)
+    const v = 'b4';
+    for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
   // ───────────────────────────────────────────────────────────────────────
