@@ -63,7 +63,14 @@
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
   let GOAL = null;      // win-or-advance objective for the current screen
   let screen = 0;
-  const NUM_SCREENS = 4;
+  const NUM_SCREENS = 5;
+
+  // Dog companion (granted at start of level 5 if the cave safe was
+  // cracked).  Floats / hops alongside the player and chases the
+  // snowman boss.  Set in loadScreen(4).
+  let dog = null;
+  // Falling snow particles for the snow level.
+  const SNOWFLAKES = [];
 
   // 6-digit safe code, split into three 2-digit fragments — one per level.
   const FRAGMENT_DIGITS = ['47', '13', '82'];
@@ -253,18 +260,73 @@
       KEY   = { x: 92, floorIdx: 3, collected: false };
       POTION = { x: 50, floorIdx: 0, collected: false };
       SAFE = { x: 48, floorIdx: 1, opened: safeOpened };
-      GOAL = 'final-key';
+      // Cave's key now opens the way to the snow boss arena.
+      GOAL = 'pickup-key';
+
+    } else if (n === 4) {
+      // ───── Screen 4: Snowy boss arena (3 floors + ladders)
+      setFloors([
+        { y: 6,  left: 1, right: 98, theme: 'snow' },
+        { y: 18, left: 1, right: 98, theme: 'snow' },
+        { y: 30, left: 1, right: 98, theme: 'snow' },
+      ]);
+      LADDERS = [
+        { x: 24, top: 6,  bottom: 18 },
+        { x: 76, top: 6,  bottom: 18 },
+        { x: 40, top: 18, bottom: 30 },
+        { x: 86, top: 18, bottom: 30 },
+      ];
+      TREES = [
+        { x: 10, floorIdx: 2, kind: 'snow-pine' },
+        { x: 52, floorIdx: 2, kind: 'snow-pine' },
+        { x: 92, floorIdx: 2, kind: 'snow-pine' },
+        { x: 14, floorIdx: 1, kind: 'snow-pine' },
+        { x: 58, floorIdx: 1, kind: 'snow-pine' },
+        { x: 90, floorIdx: 1, kind: 'snow-pine' },
+      ];
+      BUSHES = [];
+      ROCKS = [];
+      // Build snowflake storm for ambient effect
+      SNOWFLAKES.length = 0;
+      for (let i = 0; i < 80; i++) {
+        SNOWFLAKES.push({
+          x: Math.random() * COLS,
+          y: Math.random() * ROWS,
+          vy: 1.5 + Math.random() * 2.5,
+          vx: -0.4 + Math.random() * 0.8,
+          ch: Math.random() < 0.5 ? '*' : (Math.random() < 0.5 ? '·' : '❄'),
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+      GOAL = 'defeat-snowman';
+      // Dog created below after player position is finalised.
+      dog = null;
     }
 
     // Player starting position
     if (n === 0)      { player.x = 6;  player.y = FLOORS[2].y - 3; player.floorIdx = 2; }
     else if (n === 1) { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
     else if (n === 2) { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
-    else              { player.x = 6;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
+    else if (n === 3) { player.x = 6;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
+    else              { player.x = 6;  player.y = FLOORS[2].y - 3; player.floorIdx = 2; }
     player.vx = 0; player.vy = 0;
     player.state = 'stand'; player.facing = 1;
     player.onLadder = false; player.ladderIdx = -1;
     player.onBoat = false;
+
+    // Spawn the dog companion now (after player position is final).
+    if (n === 4 && safeOpened) {
+      dog = {
+        x: Math.max(2, player.x - 4),
+        y: player.y,
+        vx: 0,
+        facing: 1,
+        biteCool: 0.6,
+        biteFlash: 0,
+        mood: 'follow',
+        bobPhase: 0,
+      };
+    }
 
     spawnEnemiesForScreen(n);
   }
@@ -383,6 +445,22 @@
         { type: 'ghost', cx: 50, cy: 14, rx: 16, ry: 3,
           x: 49, y: 14, phase: 0, pSpeed: 1.0, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+      ];
+    } else if (n === 4) {
+      // Snowy boss arena — just the snowman.
+      enemies = [
+        { type: 'snowman',
+          x: 70, y: FLOORS[0].y - 4,
+          vx: 0, facing: -1,
+          hp: 10, maxHp: 10, hurt: 0, dead: 0,
+          w: 5, h: 4,
+          floorIdx: 0, floorY: FLOORS[0].y,
+          climbing: null,            // null | 'up' | 'down'
+          targetFloorIdx: -1,
+          targetFloorY: 0,
+          walk: 0,
+          repath: 0,
+        },
       ];
     } else {
       enemies = [];
@@ -646,6 +724,39 @@
     '╱╳╲',
   ];
   const GHOST_COLORS = ['#dfeaff', '#9fb8e0', '#5870a0'];
+
+  // Snowman boss — 5 wide × 4 rows tall, two-frame bob/blink.
+  const SNOWMAN_A = [
+    '  ▲  ',
+    ' ___ ',
+    '(O O)',
+    '(═v═)',
+  ];
+  const SNOWMAN_B = [
+    '  ▲  ',
+    ' ___ ',
+    '(o o)',
+    '(═V═)',
+  ];
+  const SNOWMAN_COLORS = ['#4a5070', '#cad8e8', '#1a1a22', '#cad8e8'];
+  const SNOWMAN_HURT_COLORS = ['#4a5070', '#ff5070', '#ff5070', '#ff5070'];
+
+  // Dog companion — 2 rows × 4 wide.  Right-facing; mirror for left.
+  const DOG_R = [
+    ' ___',
+    '(•‿•)>',
+  ];
+  // Use a stable visual: head + body + tail.  Width 6 to give us room
+  // for the tail glyph (`>` or `<`).
+  const DOG_R_5 = [
+    ' ╭⌒╮  ',
+    '(◕‿◕)>',
+  ];
+  const DOG_L_5 = [
+    '  ╭⌒╮ ',
+    '<(◕‿◕)',
+  ];
+  const DOG_COLORS = ['#caa070', '#7a4a22'];
 
   // Enemy registry — built fresh by loadScreen() so death state resets.
   let enemies = [];
@@ -1067,6 +1178,8 @@
     safeOpened = false;
     codeInputMode = false;
     codeBuffer = '';
+    dog = null;
+    SNOWFLAKES.length = 0;
     loadScreen(0);
   }
   loadScreen(0);
@@ -1094,6 +1207,8 @@
     updateBackground(dt);
     updatePlatforms(dt);
     updateEnemies(dt);
+    updateDog(dt);
+    updateSnowflakes(dt);
 
     if (gameState !== 'playing') {
       updateParticles(dt);
@@ -1271,6 +1386,25 @@
     if (GOAL === 'reach-right' && player.x >= COLS - 4 && !player.onLadder && player.vy === 0) {
       advanceScreen();
     }
+    if (GOAL === 'defeat-snowman' && gameState === 'playing') {
+      const alive = enemies.some(e => e.type === 'snowman' && e.hp > 0);
+      if (!alive) {
+        // Boss down — final win!
+        GOAL = 'won';
+        setTimeout(winSound, 200);
+        setTimeout(() => {
+          gameState = 'won';
+          if (safeOpened) {
+            overlayText.textContent = 'PERFECT VICTORY! ★';
+            overlaySub.textContent = 'You befriended a dog and defeated the boss';
+          } else {
+            overlayText.textContent = 'YOU WIN!';
+            overlaySub.textContent = 'The snowman is defeated — click to play again';
+          }
+          overlay.classList.remove('hidden');
+        }, 900);
+      }
+    }
 
     // ── POTION PICKUP (heals +1 HP, capped at maxHp) ────────────────
     if (POTION && !POTION.collected) {
@@ -1403,6 +1537,8 @@
         e.x = e.cx + Math.cos(e.phase) * e.rx - 1;
         e.y = e.cy + Math.sin(e.phase * 1.4) * e.ry;
         e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
+      } else if (e.type === 'snowman') {
+        updateSnowman(e, dt);
       }
     }
     // Cull dead enemies whose fade-out finished.
@@ -1414,6 +1550,186 @@
 
   function rectOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  SNOWMAN BOSS AI  (walks toward player, climbs ladders to follow)
+  // ───────────────────────────────────────────────────────────────────────
+  const SNOWMAN_WALK = 7.0;        // cells/sec — slower than the player (12)
+  const SNOWMAN_CLIMB = 5.0;
+
+  function findLadderNear(x, fromFloorIdx, wantTopY) {
+    // Find a ladder at this floor whose other end is wantTopY.
+    let best = null;
+    let bestDx = Infinity;
+    const fromFloorY = FLOORS[fromFloorIdx] ? FLOORS[fromFloorIdx].y : null;
+    if (fromFloorY === null) return null;
+    for (const l of LADDERS) {
+      const matches = (l.bottom === fromFloorY && l.top === wantTopY) ||
+                      (l.top    === fromFloorY && l.bottom === wantTopY);
+      if (!matches) continue;
+      const d = Math.abs(l.x - (x + 2));   // snowman center is ~x+2
+      if (d < bestDx) { bestDx = d; best = l; }
+    }
+    return best;
+  }
+
+  function updateSnowman(s, dt) {
+    // While climbing, just move vertically.
+    if (s.climbing) {
+      const dir = s.climbing === 'up' ? -1 : 1;
+      s.y += dir * SNOWMAN_CLIMB * dt;
+      // Done?
+      const targetY = s.targetFloorY - 4;
+      const reached = (dir < 0 && s.y <= targetY) || (dir > 0 && s.y >= targetY);
+      if (reached) {
+        s.y = targetY;
+        s.floorIdx = s.targetFloorIdx;
+        s.floorY = s.targetFloorY;
+        s.climbing = null;
+      }
+      s.walk += dt * 4;
+      return;
+    }
+    // Otherwise: walking on current floor.  Sit on the floor and chase.
+    const f = FLOORS[s.floorIdx];
+    if (!f) return;
+    s.y = f.y - 4;
+    s.floorY = f.y;
+
+    const playerFloor = FLOORS[player.floorIdx];
+    const playerFloorY = playerFloor ? playerFloor.y : null;
+
+    // Decide whether to look for a ladder.
+    s.repath -= dt;
+    if (playerFloorY !== null && playerFloorY !== s.floorY && s.repath <= 0) {
+      // Want to head to the ladder at the level above/below that leads
+      // one step toward the player.  We always step one floor toward
+      // the player rather than the destination directly.
+      const goUp = playerFloorY < s.floorY;
+      // Find a ladder connecting current floor to any adjacent floor in
+      // the desired direction.
+      let bestLadder = null, bestDx = Infinity;
+      for (const l of LADDERS) {
+        if (goUp && l.bottom === s.floorY && l.top < s.floorY) {
+          const d = Math.abs(l.x - (s.x + 2));
+          if (d < bestDx) { bestDx = d; bestLadder = l; }
+        } else if (!goUp && l.top === s.floorY && l.bottom > s.floorY) {
+          const d = Math.abs(l.x - (s.x + 2));
+          if (d < bestDx) { bestDx = d; bestLadder = l; }
+        }
+      }
+      if (bestLadder) {
+        s.targetX = bestLadder.x - 2;       // snowman center on ladder
+        s.targetLadder = bestLadder;
+      } else {
+        s.targetX = player.x;
+        s.targetLadder = null;
+      }
+      s.repath = 0.6;
+    } else if (playerFloorY === s.floorY) {
+      s.targetX = player.x;
+      s.targetLadder = null;
+    }
+    // If we have no target yet (first frame), default to chasing player.
+    if (s.targetX === undefined) s.targetX = player.x;
+
+    // Walk toward target x
+    const dx = s.targetX - s.x;
+    if (Math.abs(dx) > 0.5) {
+      s.vx = Math.sign(dx) * SNOWMAN_WALK;
+      s.facing = Math.sign(dx);
+      s.x += s.vx * dt;
+      s.walk += dt * 5;
+    } else {
+      s.vx = 0;
+    }
+
+    // Clamp to platform extents
+    s.x = clamp(s.x, f.left, f.right - (s.w - 1));
+
+    // If we've reached the chosen ladder, start climbing.
+    if (s.targetLadder) {
+      const center = s.x + 2;
+      if (Math.abs(center - s.targetLadder.x) < 0.6) {
+        const goUp = s.targetLadder.top < s.floorY;
+        s.climbing = goUp ? 'up' : 'down';
+        s.x = s.targetLadder.x - 2;   // snap
+        const destY = goUp ? s.targetLadder.top : s.targetLadder.bottom;
+        s.targetFloorY = destY;
+        s.targetFloorIdx = FLOORS.findIndex(fl => fl.y === destY);
+        s.targetLadder = null;
+        s.vx = 0;
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  DOG COMPANION AI  (follows the player, charges the snowman, bites)
+  // ───────────────────────────────────────────────────────────────────────
+  function updateDog(dt) {
+    if (!dog) return;
+    if (dog.biteCool > 0) dog.biteCool -= dt;
+    if (dog.biteFlash > 0) dog.biteFlash -= dt;
+    dog.bobPhase += dt * 6;
+
+    // Find a snowman target (any alive snowman).
+    const snowman = enemies.find(e => e.type === 'snowman' && e.hp > 0);
+
+    let tx, ty, mood;
+    if (snowman && Math.abs(snowman.y - player.y) < 8) {
+      // Chase the snowman aggressively when player + snowman are roughly
+      // on the same height range (so the dog stays helpful but doesn't
+      // teleport across whole map).
+      mood = 'chase';
+      tx = snowman.x - 1 * (snowman.x > dog.x ? -1 : 1);  // approach from same side
+      tx = snowman.x + (snowman.x > player.x ? -2 : snowman.w);  // close in
+      ty = snowman.y + 2;
+    } else {
+      mood = 'follow';
+      tx = player.x - 4 * player.facing;
+      ty = player.y + 1;
+    }
+    dog.mood = mood;
+
+    // Smooth follow (lerp).  Faster chase, slower follow.
+    const speed = mood === 'chase' ? 14 : 9;
+    const dxv = tx - dog.x;
+    const dyv = ty - dog.y;
+    const step = speed * dt;
+    if (Math.abs(dxv) < step) dog.x = tx;
+    else dog.x += Math.sign(dxv) * step;
+    if (Math.abs(dyv) < step) dog.y = ty;
+    else dog.y += Math.sign(dyv) * step;
+    dog.facing = (mood === 'chase')
+      ? (snowman ? Math.sign(snowman.x - dog.x) || dog.facing : dog.facing)
+      : (Math.sign(player.x - dog.x) || dog.facing);
+    if (dog.facing === 0) dog.facing = 1;
+
+    // Bite!  When close to snowman and cooldown is up.
+    if (snowman && dog.biteCool <= 0) {
+      const close =
+        Math.abs((dog.x + 2.5) - (snowman.x + snowman.w / 2)) < snowman.w / 2 + 2 &&
+        Math.abs(dog.y - snowman.y) < 5;
+      if (close) {
+        snowman.hp -= 1;
+        snowman.hurt = 0.18;
+        dog.biteCool = 1.4;
+        dog.biteFlash = 0.20;
+        enemyHitSound();
+        spawnParticles(snowman.x + snowman.w / 2, snowman.y + 1, {
+          count: 10, colors: ['#ffd56b','#ff9a3a','#ffffff'], chars: ['*','+','✦'],
+        });
+        if (snowman.hp <= 0) {
+          snowman.dead = 0.35;
+          enemyDieSound();
+          spawnParticles(snowman.x + snowman.w / 2, snowman.y + 2, {
+            count: 60, colors: ['#cad8e8','#7fc8ff','#ffffff','#ffd56b'],
+            chars: ['❄','*','✦','·','+'],
+          });
+        }
+      }
+    }
   }
 
   function resolveCombat() {
@@ -1559,6 +1875,79 @@
       grad.addColorStop(1,    '#1a1422');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    } else if (screen === 4) {
+      // ── Snowy sky with aurora
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0,    '#0e1530');
+      grad.addColorStop(0.45, '#26456a');
+      grad.addColorStop(0.9,  '#a0c5e0');
+      grad.addColorStop(1,    '#e2eef8');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Aurora ribbons — drifting colored bands near the top
+      for (let band = 0; band < 3; band++) {
+        const baseY = (2 + band) * CHAR_H;
+        const g = ctx.createLinearGradient(0, baseY, canvas.width, baseY);
+        const phase = time * 0.3 + band * 0.8;
+        const c1 = `rgba(120,240,200,${0.10 + 0.05 * Math.sin(phase)})`;
+        const c2 = `rgba(200,140,255,${0.10 + 0.05 * Math.cos(phase)})`;
+        g.addColorStop(0,   'rgba(0,0,0,0)');
+        g.addColorStop(0.3, c1);
+        g.addColorStop(0.7, c2);
+        g.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, baseY, canvas.width, CHAR_H * 0.9);
+      }
+
+      // Faint stars at the top
+      for (const s of STARS) {
+        if (s.y > 4) continue;
+        const tw = 0.5 + 0.5 * Math.sin(s.phase + time * 1.5);
+        putChar(s.x | 0, s.y | 0, s.ch, `rgba(220,235,255,${0.25 + tw * 0.4})`);
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  SNOWFLAKES (only meaningful on the snow screen)
+  // ───────────────────────────────────────────────────────────────────────
+  function updateSnowflakes(dt) {
+    if (screen !== 4 || SNOWFLAKES.length === 0) return;
+    for (const f of SNOWFLAKES) {
+      f.phase += dt * 1.2;
+      f.x += (f.vx + Math.sin(f.phase) * 0.5) * dt * 4;
+      f.y += f.vy * dt;
+      if (f.y > ROWS) {
+        f.y = -1;
+        f.x = Math.random() * COLS;
+      }
+      if (f.x < 0) f.x = COLS - 1;
+      else if (f.x > COLS) f.x = 0;
+    }
+  }
+  function drawSnowflakes() {
+    if (screen !== 4) return;
+    for (const f of SNOWFLAKES) {
+      putChar(f.x | 0, f.y | 0, f.ch, 'rgba(235,245,255,0.85)');
+    }
+  }
+
+  function drawDog(time) {
+    if (!dog) return;
+    const sprite = dog.facing >= 0 ? DOG_R_5 : DOG_L_5;
+    const px = Math.round(dog.x);
+    const bob = Math.sin(dog.bobPhase) * 0.2;
+    const py = Math.round(dog.y + bob);
+    // Bite flash → red tint briefly
+    const colors = dog.biteFlash > 0
+      ? ['#ffd56b', '#ff5070']
+      : DOG_COLORS;
+    putSpriteColored(px, py, sprite, colors);
+    // Mood/intent indicator
+    if (dog.mood === 'chase' && (((time * 6) | 0) % 2) === 0) {
+      putChar(px + 2, py - 1, '!', '#ff8060');
     }
   }
 
@@ -1751,6 +2140,10 @@
       const a = (((time * 4) | 0) % 2) === 0;
       sprite = a ? GHOST_A : GHOST_B;
       colors = GHOST_COLORS;
+    } else if (e.type === 'snowman') {
+      const a = ((e.walk | 0) % 2) === 0;
+      sprite = a ? SNOWMAN_A : SNOWMAN_B;
+      colors = SNOWMAN_COLORS;
     }
     // Dead enemies fade and shake (until culled)
     if (e.hp <= 0) {
@@ -1772,7 +2165,18 @@
       for (let r = 0; r < sprite.length; r++) putString(px, py + r, sprite[r], colors[r] || colors[colors.length - 1]);
       ctx.globalAlpha = 1;
     }
-    // Tiny HP pip above every enemy
+    // HP pips above every enemy.  Boss-sized enemies get a single bar.
+    if (e.maxHp >= 10) {
+      const w = Math.max(3, e.w);
+      const filled = Math.round((e.hp / e.maxHp) * w);
+      for (let i = 0; i < w; i++) {
+        putChar(px + i, py - 1, i < filled ? '▰' : '▱', i < filled ? '#ff5070' : '#552040');
+      }
+      // Label "BOSS"
+      const lbl = 'BOSS';
+      for (let i = 0; i < lbl.length; i++) putChar(px + i, py - 2, lbl[i], '#ffd56b');
+      return;   // skip per-pip drawing below
+    }
     for (let i = 0; i < e.maxHp; i++) {
       putChar(px + i, py - 1, i < e.hp ? '▮' : '▯', '#ff6464');
     }
@@ -1824,6 +2228,7 @@
       else if (theme === 'bank')   { topColor = '#5fa64a'; shadowColor = '#3b6230'; capColor = '#3b6230'; }
       else if (theme === 'cloud')  { topColor = '#e8efff'; shadowColor = '#8a9ec8'; capColor = '#6680b0'; }
       else if (theme === 'stone')  { topColor = '#9aa0aa'; shadowColor = '#4a4e58'; capColor = '#5a5e68'; }
+      else if (theme === 'snow')   { topColor = '#ffffff'; shadowColor = '#6d8aad'; capColor = '#9fb4cd'; }
       else                          { topColor = '#caa070'; shadowColor = '#704830'; capColor = '#7a5a32'; }
       // Platform top
       for (let x = left; x <= right; x++) {
@@ -1834,6 +2239,8 @@
           grain = ((x * 7 + i * 31) % 5) === 0 ? '▒' : '═';
         } else if (theme === 'stone') {
           grain = ((x * 7 + i * 31) % 11) === 0 ? '╬' : ((x * 7 + i * 31) % 5 === 0 ? '▓' : '▀');
+        } else if (theme === 'snow') {
+          grain = ((x * 7 + i * 31) % 11) === 0 ? '▓' : ((x + i) % 4 === 0 ? '▒' : '▀');
         } else {
           grain = ((x * 7 + i * 31) % 13) === 0 ? '═' : '━';
         }
@@ -1848,6 +2255,8 @@
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
         } else if (theme === 'stone') {
           ch = ((x + i) % 5 === 0) ? '▓' : ((x + i) % 5 === 2 ? '▒' : '░');
+        } else if (theme === 'snow') {
+          ch = ((x + i) % 5 === 0) ? '▒' : ((x + i) % 5 === 2 ? '░' : ' ');
         } else {
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
         }
@@ -1876,16 +2285,25 @@
     }
   }
 
+  // Snowy pine: same shape, white-ish foliage with hints of green.
+  const TREE_SNOW_PINE_COLORS = ['#eaf0f8', '#dbe6f0', '#9ec3ad', '#6f9d7e', '#7a4a22', '#7a4a22'];
+
   function drawTree(t) {
     const y = FLOORS[t.floorIdx].y - 6;
-    const sprite = t.kind === 'pine' ? TREE_PINE : TREE_ROUND;
-    const colors = t.kind === 'pine' ? TREE_PINE_COLORS : TREE_ROUND_COLORS;
+    const isSnowPine = t.kind === 'snow-pine';
+    const sprite = (t.kind === 'pine' || isSnowPine) ? TREE_PINE : TREE_ROUND;
+    const colors = isSnowPine ? TREE_SNOW_PINE_COLORS
+                              : (t.kind === 'pine' ? TREE_PINE_COLORS : TREE_ROUND_COLORS);
     // Top of the tree sways with the wind; trunk stays put.
     const sway = Math.sin(windPhase + t.x * 0.35) * 0.6;
     for (let r = 0; r < sprite.length; r++) {
       const isCanopy = r < 4;
       const dx = isCanopy ? Math.round(sway * (1 - r * 0.25)) : 0;
       putString(t.x - 3 + dx, y + r, sprite[r], colors[r]);
+    }
+    // Cap with a little snow if it's a snow pine.
+    if (isSnowPine) {
+      putChar(t.x, y - 1, '·', '#ffffff');
     }
   }
   function drawBush(b) {
@@ -2164,8 +2582,12 @@
     // Enemies behind player so player passes in front during overlap.
     for (const e of enemies) drawEnemy(e, time);
 
+    drawDog(time);
     drawPlayer(time);
     drawSword(time);
+
+    // Snowflakes float in front of most things, behind the modal.
+    if (screen === 4) drawSnowflakes();
 
     drawParticles();
 
@@ -2190,12 +2612,12 @@
   }
 
   function drawScreenLabel() {
-    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS'];
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS'];
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'b5';
+    const v = 'b6';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
