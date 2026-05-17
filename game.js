@@ -5,23 +5,44 @@
   // ───────────────────────────────────────────────────────────────────────
   //  CANVAS / GRID
   // ───────────────────────────────────────────────────────────────────────
-  // Cell pixel size at 1.5× the original (5×9 → 7.5×13.5).  Grid stays
-  // 200×68 cells, so canvas grows to 1500×918 — easier to see without
-  // changing any gameplay coordinates.
-  const CHAR_W = 7.5;
-  const CHAR_H = 13.5;
+  // The 200×68 logical grid never changes.  Cell pixel size scales with
+  // the browser window so the game always fills the viewport while
+  // staying crisp (the canvas redraws at whatever resolution fits).
+  // CHAR_W/CHAR_H are recomputed in fitToWindow() below.
+  let CHAR_W = 7.5;
+  let CHAR_H = 13.5;
   const COLS = 200;
   const ROWS = 68;
+  // Cells are taller than wide; keep that intrinsic ratio constant.
+  const CELL_RATIO = CHAR_H / CHAR_W;
+  const FONT_FAMILY = '"Cascadia Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "Consolas", "Menlo", monospace';
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
-  canvas.width = COLS * CHAR_W;
-  canvas.height = ROWS * CHAR_H;
 
-  const FONT = '12px "Cascadia Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "Consolas", "Menlo", monospace';
-  ctx.font = FONT;
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'center';
+  function applyCtxState() {
+    ctx.font = Math.max(6, Math.round(CHAR_H - 1)) + 'px ' + FONT_FAMILY;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center';
+  }
+
+  function fitToWindow() {
+    const hudEl = document.getElementById('hud');
+    const hudH = hudEl ? hudEl.offsetHeight : 36;
+    // Outer chrome (frame border + padding + a couple of px of safety).
+    const chromeW = 16, chromeH = 16;
+    const availW = Math.max(320, window.innerWidth  - chromeW);
+    const availH = Math.max(240, window.innerHeight - hudH - chromeH);
+    // Pick the largest cell width that lets both axes fit.
+    const scale = Math.min(availW / COLS, availH / (ROWS * CELL_RATIO));
+    CHAR_W = scale;
+    CHAR_H = scale * CELL_RATIO;
+    canvas.width  = Math.floor(COLS * CHAR_W);
+    canvas.height = Math.floor(ROWS * CHAR_H);
+    applyCtxState();
+  }
+  fitToWindow();
+  window.addEventListener('resize', fitToWindow);
 
   function putChar(col, row, ch, color) {
     if (!ch || ch === ' ') return;
@@ -2293,11 +2314,12 @@
 
       // moon glow
       const mgx = (MOON.x + 4) * CHAR_W, mgy = (MOON.y + 1) * CHAR_H;
-      const mg = ctx.createRadialGradient(mgx, mgy, 0, mgx, mgy, 90);
+      const mr = CHAR_W * 12;
+      const mg = ctx.createRadialGradient(mgx, mgy, 0, mgx, mgy, mr);
       mg.addColorStop(0, 'rgba(255,230,160,0.20)');
       mg.addColorStop(1, 'rgba(255,230,160,0)');
       ctx.fillStyle = mg;
-      ctx.fillRect(mgx - 90, mgy - 90, 180, 180);
+      ctx.fillRect(mgx - mr, mgy - mr, mr * 2, mr * 2);
 
       // stars
       for (const s of STARS) {
@@ -2320,11 +2342,12 @@
       // Sun
       const sx = 78, sy = 8;
       const sgx = (sx + 1) * CHAR_W, sgy = (sy + 1) * CHAR_H;
-      const sg = ctx.createRadialGradient(sgx, sgy, 0, sgx, sgy, 110);
+      const sr = CHAR_W * 15;
+      const sg = ctx.createRadialGradient(sgx, sgy, 0, sgx, sgy, sr);
       sg.addColorStop(0, 'rgba(255,220,140,0.55)');
       sg.addColorStop(1, 'rgba(255,220,140,0)');
       ctx.fillStyle = sg;
-      ctx.fillRect(sgx - 110, sgy - 110, 220, 220);
+      ctx.fillRect(sgx - sr, sgy - sr, sr * 2, sr * 2);
       putString(sx, sy,     ' ╭───╮ ', '#fff5b8');
       putString(sx, sy + 1, '(  ☀  )', '#ffd56b');
       putString(sx, sy + 2, ' ╰───╯ ', '#fff5b8');
@@ -2349,11 +2372,12 @@
       // Sun
       const sx = 8, sy = 3;
       const sgx = (sx + 2) * CHAR_W, sgy = (sy + 1) * CHAR_H;
-      const sg = ctx.createRadialGradient(sgx, sgy, 0, sgx, sgy, 130);
+      const sr = CHAR_W * 17;
+      const sg = ctx.createRadialGradient(sgx, sgy, 0, sgx, sgy, sr);
       sg.addColorStop(0, 'rgba(255,235,170,0.55)');
       sg.addColorStop(1, 'rgba(255,235,170,0)');
       ctx.fillStyle = sg;
-      ctx.fillRect(sgx - 130, sgy - 130, 260, 260);
+      ctx.fillRect(sgx - sr, sgy - sr, sr * 2, sr * 2);
       putString(sx, sy,     ' ╭───╮ ', '#fff5b8');
       putString(sx, sy + 1, '(  ☀  )', '#ffe888');
       putString(sx, sy + 2, ' ╰───╯ ', '#fff5b8');
@@ -3048,11 +3072,12 @@
       // Glow halo
       const gx = (t.x + 0.5) * CHAR_W;
       const gy = (y + 0.5) * CHAR_H;
-      const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, 60);
+      const tr = CHAR_W * 8;
+      const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, tr);
       grad.addColorStop(0, 'rgba(255,160,60,0.20)');
       grad.addColorStop(1, 'rgba(255,160,60,0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(gx - 60, gy - 60, 120, 120);
+      ctx.fillRect(gx - tr, gy - tr, tr * 2, tr * 2);
     }
   }
 
@@ -3160,7 +3185,7 @@
     if (!player.onLadder && FLOORS[player.floorIdx]) {
       const fy = FLOORS[player.floorIdx].y;
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect((px) * CHAR_W, (fy - 0.2) * CHAR_H, 3 * CHAR_W, 3);
+      ctx.fillRect((px) * CHAR_W, (fy - 0.2) * CHAR_H, 3 * CHAR_W, Math.max(2, CHAR_H * 0.25));
     }
   }
 
@@ -3257,7 +3282,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c3';
+    const v = 'c4';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
