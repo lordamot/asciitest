@@ -49,14 +49,36 @@
   let TREES = [];
   let BUSHES = [];
   let ROCKS = [];
+  let STALACTITES = [];  // cave decorations (cave: screen 3)
+  let STALAGMITES = [];
+  let CRYSTALS = [];
+  let TORCHES = [];
   let CHEST = null;     // { x, floorIdx }
   let KEY = null;       // { x, floorIdx, collected }
+  let POTION = null;    // { x, floorIdx, collected } — heals +1 HP
+  let FRAGMENT = null;  // { x, floorIdx, digits: "47", collected, levelIdx }
+  let SAFE = null;      // { x, floorIdx, opened }
   let BOAT = null;      // screen 1: { x, y, w, baseY, phase, onBoard }
   let RIVER = null;     // screen 1: { left, right, top }
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
   let GOAL = null;      // win-or-advance objective for the current screen
   let screen = 0;
-  const NUM_SCREENS = 3;
+  const NUM_SCREENS = 4;
+
+  // 6-digit safe code, split into three 2-digit fragments — one per level.
+  const FRAGMENT_DIGITS = ['47', '13', '82'];
+  const SAFE_CODE = FRAGMENT_DIGITS.join('');   // "471382"
+  // Player-collected fragments (null until picked up).
+  let collectedCodes = [null, null, null];
+  let safeOpened = false;
+
+  // Modal code-entry state
+  let codeInputMode = false;
+  let codeBuffer = '';
+  let codeShake = 0;
+  let codeMessage = '';     // transient feedback line
+  let codeMessageTimer = 0;
+  let interactQueued = false;
 
   function setFloors(arr) {
     FLOORS = arr;
@@ -73,10 +95,19 @@
     MOV_PLATS = [];
     KEY = null;
     CHEST = null;
+    POTION = null;
+    FRAGMENT = null;
+    SAFE = null;
     BUSHES = [];
     ROCKS = [];
     TREES = [];
     LADDERS = [];
+    STALACTITES = [];
+    STALAGMITES = [];
+    CRYSTALS = [];
+    TORCHES = [];
+    codeInputMode = false;
+    codeBuffer = '';
 
     if (n === 0) {
       // ───── Screen 0: Forest at night
@@ -114,6 +145,9 @@
       ];
       CHEST = { x: 44, floorIdx: 0 };
       KEY   = { x: 52, floorIdx: 0, collected: false };
+      // Optional code fragment (digits "47") + healing potion
+      FRAGMENT = { x: 36, floorIdx: 1, digits: FRAGMENT_DIGITS[0], levelIdx: 0, collected: !!collectedCodes[0] };
+      POTION   = { x: 64, floorIdx: 2, collected: false };
       GOAL  = 'pickup-key';
 
     } else if (n === 1) {
@@ -150,6 +184,8 @@
       ROCKS = [
         { x: 22, floorIdx: 0 }, { x: 78, floorIdx: 1 },
       ];
+      FRAGMENT = { x: 10, floorIdx: 0, digits: FRAGMENT_DIGITS[1], levelIdx: 1, collected: !!collectedCodes[1] };
+      POTION   = { x: 90, floorIdx: 1, collected: false };
       GOAL = 'reach-right';
 
     } else if (n === 2) {
@@ -167,19 +203,64 @@
       for (const f of FLOORS) {
         if (f.oscY) { f.baseY = f.y; f.prevY = f.y; }
       }
-      CHEST = { x: 92, floorIdx: 6 };
-      KEY   = { x: 92, floorIdx: 6, collected: false };
+      // No final key here any more — sky goal is now reach-right (advance
+      // into the cave).  Fragment + potion live on the path.
+      FRAGMENT = { x: 36, floorIdx: 2, digits: FRAGMENT_DIGITS[2], levelIdx: 2, collected: !!collectedCodes[2] };
+      POTION   = { x: 62, floorIdx: 4, collected: false };
       BUSHES = [];
       ROCKS  = [];
       TREES  = [];
       LADDERS = [];
+      GOAL = 'reach-right';
+
+    } else if (n === 3) {
+      // ───── Screen 3: Cave with the safe
+      setFloors([
+        { y: 30, left: 1,  right: 98, theme: 'stone' },  // 0  main bottom
+        { y: 20, left: 22, right: 78, theme: 'stone' },  // 1  mid (safe here)
+        { y: 10, left: 1,  right: 32, theme: 'stone' },  // 2  upper-left
+        { y: 10, left: 66, right: 98, theme: 'stone' },  // 3  upper-right (key here)
+      ]);
+      LADDERS = [
+        { x: 30, top: 20, bottom: 30 },
+        { x: 70, top: 20, bottom: 30 },
+        { x: 26, top: 10, bottom: 20 },
+        { x: 72, top: 10, bottom: 20 },
+      ];
+      // Decorations: stalactites along ceiling, stalagmites on bottom,
+      // crystals embedded in walls, torches for atmosphere.
+      STALACTITES = [
+        { x: 6 }, { x: 14 }, { x: 22 }, { x: 38 }, { x: 50 },
+        { x: 62 }, { x: 76 }, { x: 86 }, { x: 94 },
+      ];
+      STALAGMITES = [
+        { x: 8, floorIdx: 0 }, { x: 16, floorIdx: 0 }, { x: 78, floorIdx: 0 },
+        { x: 88, floorIdx: 0 }, { x: 40, floorIdx: 1 }, { x: 60, floorIdx: 1 },
+      ];
+      CRYSTALS = [
+        { x: 4,  y: 6,  color: 'teal'   },
+        { x: 96, y: 6,  color: 'purple' },
+        { x: 12, y: 16, color: 'pink'   },
+        { x: 88, y: 16, color: 'teal'   },
+        { x: 4,  y: 26, color: 'purple' },
+        { x: 96, y: 26, color: 'pink'   },
+      ];
+      TORCHES = [
+        { x: 18, floorIdx: 0 }, { x: 80, floorIdx: 0 },
+        { x: 30, floorIdx: 1 }, { x: 70, floorIdx: 1 },
+      ];
+      CHEST = { x: 88, floorIdx: 3 };
+      KEY   = { x: 92, floorIdx: 3, collected: false };
+      POTION = { x: 50, floorIdx: 0, collected: false };
+      SAFE = { x: 48, floorIdx: 1, opened: safeOpened };
       GOAL = 'final-key';
     }
 
     // Player starting position
     if (n === 0)      { player.x = 6;  player.y = FLOORS[2].y - 3; player.floorIdx = 2; }
     else if (n === 1) { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
-    else              { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
+    else if (n === 2) { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
+    else              { player.x = 6;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
     player.vx = 0; player.vy = 0;
     player.state = 'stand'; player.facing = 1;
     player.onLadder = false; player.ladderIdx = -1;
@@ -192,8 +273,13 @@
     const next = screen + 1;
     if (next >= NUM_SCREENS) {
       gameState = 'won';
-      overlayText.textContent = 'YOU WIN!';
-      overlaySub.textContent = 'Click to play again';
+      if (safeOpened) {
+        overlayText.textContent = 'PERFECT VICTORY! ★';
+        overlaySub.textContent = 'You opened the safe — click to play again';
+      } else {
+        overlayText.textContent = 'YOU WIN!';
+        overlaySub.textContent = 'Click to play again';
+      }
       overlay.classList.remove('hidden');
       setTimeout(winSound, 200);
       return;
@@ -208,6 +294,33 @@
       loadScreen(next);
       pickupSound();
     }, 250);
+  }
+
+  function submitCode() {
+    if (codeBuffer === SAFE_CODE) {
+      safeOpened = true;
+      if (SAFE) SAFE.opened = true;
+      codeMessage = 'SAFE OPENED!';
+      codeMessageTimer = 1.8;
+      codeBuffer = '';
+      // Big payoff
+      const notes = [523, 659, 784, 1046, 1318];
+      notes.forEach((n, i) => setTimeout(() => blip(n, 0.18, 'triangle', 0.07), i * 90));
+      if (SAFE) {
+        spawnParticles(SAFE.x + 4, FLOORS[SAFE.floorIdx].y - 3, {
+          count: 60,
+          colors: ['#ffd56b','#ffe69a','#ffffff','#ff9a3a'],
+          chars: ['★','✦','✧','*','+','·'],
+        });
+      }
+      setTimeout(() => { codeInputMode = false; }, 900);
+    } else {
+      codeMessage = 'WRONG CODE — TRY AGAIN';
+      codeMessageTimer = 1.2;
+      codeBuffer = '';
+      codeShake = 0.3;
+      blip(180, 0.18, 'sawtooth', 0.05, 80);
+    }
   }
 
   function spawnEnemiesForScreen(n) {
@@ -254,6 +367,22 @@
         { type: 'slime', x: 75, y: FLOORS[5].y - 2, vx: 2.5, facing: 1, hp: 1, maxHp: 1,
           floorIdx: 5, minX: 74, maxX: 78, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[5].y - 2 },
+      ];
+    } else if (n === 3) {
+      // Cave screen: two skeletons + ghost + slime
+      enemies = [
+        { type: 'skel', x: 50, y: FLOORS[0].y - 3, vx: 5, facing: 1, hp: 2, maxHp: 2,
+          floorIdx: 0, minX: 22, maxX: 78, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[0].y - 3 },
+        { type: 'skel', x: 38, y: FLOORS[1].y - 3, vx: -4, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 1, minX: 24, maxX: 60, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[1].y - 3 },
+        { type: 'slime', x: 80, y: FLOORS[3].y - 2, vx: 3.5, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 3, minX: 68, maxX: 92, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[3].y - 2 },
+        { type: 'ghost', cx: 50, cy: 14, rx: 16, ry: 3,
+          x: 49, y: 14, phase: 0, pSpeed: 1.0, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
     } else {
       enemies = [];
@@ -597,6 +726,57 @@
   ];
 
   // ───────────────────────────────────────────────────────────────────────
+  //  ITEM SPRITES (potion + code fragment + safe + cave decor)
+  // ───────────────────────────────────────────────────────────────────────
+  const POTION_SPRITE = [
+    '╭─╮',
+    '│♥│',
+    '╰─╯',
+  ];
+  const POTION_COLORS = ['#a04060', '#ff5070', '#a04060'];
+
+  // Fragment shows 2 digits — sprite is a small scroll/tablet 4 wide.
+  function makeFragmentSprite(digits) {
+    return [
+      '┌──┐',
+      '│' + digits + '│',
+      '└──┘',
+    ];
+  }
+  const FRAGMENT_COLORS = ['#caa070', '#ffd56b', '#caa070'];
+
+  // Safe sprite 10 wide × 5 rows (locked).  The 6-digit window will be
+  // overlaid by drawSafe() with the current display state.
+  const SAFE_LOCKED = [
+    '╔════════╗',
+    '║▒▒▒▒▒▒▒▒║',
+    '║┌──────┐║',
+    '║│DDDDDD│║',
+    '║└──◉───┘║',
+    '╚════════╝',
+  ];
+  const SAFE_OPENED = [
+    '╔════════╗',
+    '║░░░░░░░░║',
+    '║┌──────┐║',
+    '║│★★★★★★│║',
+    '║│  ✓✓  │║',
+    '╚════════╝',
+  ];
+  const SAFE_COLORS = ['#7a7e88', '#5a5d66', '#7a7e88', '#caa070', '#5a5d66', '#7a7e88'];
+  const SAFE_OPEN_COLORS = ['#caa070', '#ffd56b', '#caa070', '#ffd56b', '#ffe69a', '#caa070'];
+
+  const STALACTITE = [' ▼ ', ' │ '];
+  const STALACTITE_COLORS = ['#5a4a3a', '#3a2c22'];
+  const STALAGMITE = [' │ ', ' ▲ '];
+  const STALAGMITE_COLORS = ['#3a2c22', '#5a4a3a'];
+  const CRYSTAL = [' ◆ '];
+  const CRYSTAL_COLORS = { teal: '#6fe8d0', purple: '#c060e0', pink: '#ff80a0' };
+  const TORCH = [' ▲ ', ' │ '];
+  const TORCH_FIRE_COLORS = ['#ffb45a', '#ff6a30'];
+  const TORCH_STICK_COLOR = '#7a4a22';
+
+  // ───────────────────────────────────────────────────────────────────────
   //  PARTICLES
   // ───────────────────────────────────────────────────────────────────────
   const particles = [];
@@ -820,15 +1000,36 @@
   const ATTACK_KEYS = new Set(['x','X','z','Z','j','J']);
   window.addEventListener('keydown', (e) => {
     const k = e.key;
+    ensureAudio();
+    // Code-entry modal eats nearly all input while open.
+    if (codeInputMode) {
+      e.preventDefault();
+      if (k >= '0' && k <= '9') {
+        if (codeBuffer.length < 6) {
+          codeBuffer += k;
+          blip(720, 0.03, 'square', 0.03);
+          if (codeBuffer.length === 6) submitCode();
+        }
+      } else if (k === 'Backspace') {
+        codeBuffer = codeBuffer.slice(0, -1);
+        blip(360, 0.03, 'square', 0.03);
+      } else if (k === 'Enter') {
+        if (codeBuffer.length > 0) submitCode();
+      } else if (k === 'Escape' || k === 'e' || k === 'E') {
+        codeInputMode = false;
+        codeBuffer = '';
+      }
+      return;
+    }
     if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Spacebar'].includes(k)) e.preventDefault();
     if (k === ' ' && !keys[' ']) jumpQueued = true;
     if (ATTACK_KEYS.has(k) && !keys[k]) attackQueued = true;
+    if ((k === 'e' || k === 'E') && !keys[k]) interactQueued = true;
     if (k === 'm' || k === 'M') {
       soundOn = !soundOn;
       sndBtn.textContent = soundOn ? 'ON' : 'OFF';
     }
     keys[k] = true;
-    ensureAudio();
   }, { passive: false });
   window.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
@@ -862,6 +1063,10 @@
     particles.length = 0;
     SHOOTING_STARS.length = 0;
     BATS.length = 0;
+    collectedCodes = [null, null, null];
+    safeOpened = false;
+    codeInputMode = false;
+    codeBuffer = '';
     loadScreen(0);
   }
   loadScreen(0);
@@ -891,6 +1096,14 @@
     updateEnemies(dt);
 
     if (gameState !== 'playing') {
+      updateParticles(dt);
+      return;
+    }
+
+    // Freeze player physics while the code-entry modal is open.
+    if (codeInputMode) {
+      if (codeMessageTimer > 0) codeMessageTimer -= dt;
+      if (codeShake > 0) codeShake -= dt;
       updateParticles(dt);
       return;
     }
@@ -1043,8 +1256,13 @@
           setTimeout(winSound, 400);
           setTimeout(() => {
             gameState = 'won';
-            overlayText.textContent = 'YOU WIN!';
-            overlaySub.textContent = 'Click to play again';
+            if (safeOpened) {
+              overlayText.textContent = 'PERFECT VICTORY! ★';
+              overlaySub.textContent = 'You opened the safe — click to play again';
+            } else {
+              overlayText.textContent = 'YOU WIN!';
+              overlaySub.textContent = 'Click to play again';
+            }
             overlay.classList.remove('hidden');
           }, 800);
         }
@@ -1053,6 +1271,55 @@
     if (GOAL === 'reach-right' && player.x >= COLS - 4 && !player.onLadder && player.vy === 0) {
       advanceScreen();
     }
+
+    // ── POTION PICKUP (heals +1 HP, capped at maxHp) ────────────────
+    if (POTION && !POTION.collected) {
+      const py = FLOORS[POTION.floorIdx].y - 3;
+      const ddx = (player.x + 1) - (POTION.x + 1);
+      const ddy = (player.y + 1.5) - (py + 1.5);
+      if (Math.abs(ddx) < 2 && Math.abs(ddy) < 2.5) {
+        POTION.collected = true;
+        if (player.hp < player.maxHp) player.hp += 1;
+        // Sparkle + tone
+        blip(660, 0.08, 'square', 0.06);
+        setTimeout(() => blip(880, 0.10, 'square', 0.06), 60);
+        setTimeout(() => blip(1175, 0.14, 'triangle', 0.07), 130);
+        spawnParticles(POTION.x + 1, py + 1.5, { count: 18, colors: ['#ff5070','#ff9aa0','#ffffff'], chars: ['♥','·','*','+'] });
+      }
+    }
+
+    // ── CODE FRAGMENT PICKUP (records 2 digits) ─────────────────────
+    if (FRAGMENT && !FRAGMENT.collected) {
+      const fy = FLOORS[FRAGMENT.floorIdx].y - 3;
+      const ddx = (player.x + 1) - (FRAGMENT.x + 1);
+      const ddy = (player.y + 1.5) - (fy + 1.5);
+      if (Math.abs(ddx) < 2.5 && Math.abs(ddy) < 2.5) {
+        FRAGMENT.collected = true;
+        collectedCodes[FRAGMENT.levelIdx] = FRAGMENT.digits;
+        blip(523, 0.10, 'square', 0.06);
+        setTimeout(() => blip(784, 0.12, 'square', 0.06), 90);
+        setTimeout(() => blip(1046, 0.14, 'square', 0.06), 180);
+        spawnParticles(FRAGMENT.x + 1, fy + 1.5, { count: 22, colors: ['#ffd56b','#ffe69a','#ffffff'], chars: ['*','+','✦','★'] });
+      }
+    }
+
+    // ── SAFE INTERACTION (press E near the safe to enter code) ──────
+    if (SAFE && interactQueued && !codeInputMode) {
+      const sy = FLOORS[SAFE.floorIdx].y - 6;
+      const ddx = (player.x + 1) - (SAFE.x + 4);
+      const ddy = (player.y + 1.5) - (sy + 2.5);
+      if (Math.abs(ddx) < 5 && Math.abs(ddy) < 4 && !SAFE.opened) {
+        codeInputMode = true;
+        codeBuffer = '';
+        codeMessage = 'ENTER 6-DIGIT CODE';
+        codeMessageTimer = 0;
+        blip(440, 0.10, 'triangle', 0.05);
+      }
+    }
+    interactQueued = false;
+
+    if (codeMessageTimer > 0) codeMessageTimer -= dt;
+    if (codeShake > 0) codeShake -= dt;
 
     // ── OUT-OF-BOUNDS DEATH (fell off the world) ────────────────────
     if (player.y > ROWS + 1 && !player.dead) {
@@ -1283,6 +1550,15 @@
       putString(sx, sy,     ' ╭───╮ ', '#fff5b8');
       putString(sx, sy + 1, '(  ☀  )', '#ffe888');
       putString(sx, sy + 2, ' ╰───╯ ', '#fff5b8');
+
+    } else if (screen === 3) {
+      // ── Cave (no real sky, but a deep gradient backdrop)
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0,    '#0c0810');
+      grad.addColorStop(0.5,  '#15101c');
+      grad.addColorStop(1,    '#1a1422');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
   }
 
@@ -1334,6 +1610,11 @@
       drawOrnamentLayer(ORN_FAR,  0, ROWS - 1, 0.04, 'rgba(255,255,255,0.35)');
       drawOrnamentLayer(ORN_MID,  0, ROWS - 1, 0.10, 'rgba(255,255,255,0.18)');
       drawOrnamentLayer(ORN_VINE, 0, ROWS - 1, 0.18, 'rgba(255,255,255,0.12)');
+    } else if (screen === 3) {
+      // Cave: rock-wall pattern with crystals woven through
+      drawOrnamentLayer(ORN_FAR,  0, ROWS - 1, 0.04, 'rgba(80,90,120,0.20)');
+      drawOrnamentLayer(ORN_MID,  0, ROWS - 1, 0.10, 'rgba(110,120,150,0.10)');
+      drawOrnamentLayer(ORN_VINE, 0, ROWS - 1, 0.16, 'rgba(160,100,200,0.10)');
     }
   }
 
@@ -1542,6 +1823,7 @@
       else if (theme === 'wood-dark')  { topColor = '#a07a44'; shadowColor = '#4a2e1c'; capColor = '#7a5a32'; }
       else if (theme === 'bank')   { topColor = '#5fa64a'; shadowColor = '#3b6230'; capColor = '#3b6230'; }
       else if (theme === 'cloud')  { topColor = '#e8efff'; shadowColor = '#8a9ec8'; capColor = '#6680b0'; }
+      else if (theme === 'stone')  { topColor = '#9aa0aa'; shadowColor = '#4a4e58'; capColor = '#5a5e68'; }
       else                          { topColor = '#caa070'; shadowColor = '#704830'; capColor = '#7a5a32'; }
       // Platform top
       for (let x = left; x <= right; x++) {
@@ -1550,6 +1832,8 @@
           grain = ((x * 5 + i * 7) % 4 === 0) ? '▔' : '─';
         } else if (theme === 'bank') {
           grain = ((x * 7 + i * 31) % 5) === 0 ? '▒' : '═';
+        } else if (theme === 'stone') {
+          grain = ((x * 7 + i * 31) % 11) === 0 ? '╬' : ((x * 7 + i * 31) % 5 === 0 ? '▓' : '▀');
         } else {
           grain = ((x * 7 + i * 31) % 13) === 0 ? '═' : '━';
         }
@@ -1562,6 +1846,8 @@
           ch = ((x + i) % 3 === 0) ? '░' : ((x + i) % 3 === 1 ? '▒' : ' ');
         } else if (theme === 'bank') {
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
+        } else if (theme === 'stone') {
+          ch = ((x + i) % 5 === 0) ? '▓' : ((x + i) % 5 === 2 ? '▒' : '░');
         } else {
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
         }
@@ -1631,6 +1917,157 @@
       const sx = KEY.x + ((Math.random() * 3) | 0);
       const sy = drawY - 1 + ((Math.random() * 2) | 0);
       putChar(sx, sy, '✦', '#fffbe0');
+    }
+  }
+
+  function drawPotion(time) {
+    if (!POTION || POTION.collected) return;
+    const baseY = FLOORS[POTION.floorIdx].y - 3;
+    const bob = Math.sin(time * 2.4) * 0.3;
+    const drawY = Math.round(baseY + bob);
+    putSpriteColored(POTION.x, drawY, POTION_SPRITE, POTION_COLORS);
+    if ((((time * 6) | 0) % 4) === 0) {
+      putChar(POTION.x + 1, drawY - 1, '·', '#ffaab0');
+    }
+  }
+
+  function drawFragment(time) {
+    if (!FRAGMENT || FRAGMENT.collected) return;
+    const baseY = FLOORS[FRAGMENT.floorIdx].y - 3;
+    const bob = Math.sin(time * 2.6 + 1.0) * 0.3;
+    const drawY = Math.round(baseY + bob);
+    const sprite = makeFragmentSprite(FRAGMENT.digits);
+    putSpriteColored(FRAGMENT.x, drawY, sprite, FRAGMENT_COLORS);
+    if ((((time * 5) | 0) % 3) === 0) {
+      putChar(FRAGMENT.x + 1 + ((Math.random() * 3) | 0), drawY - 1, '✦', '#ffe888');
+    }
+  }
+
+  function drawSafe(time) {
+    if (!SAFE) return;
+    const baseY = FLOORS[SAFE.floorIdx].y - 6;
+    const sprite = SAFE.opened ? SAFE_OPENED : SAFE_LOCKED;
+    const colors = SAFE.opened ? SAFE_OPEN_COLORS : SAFE_COLORS;
+    // Overlay the actual 6-digit display state ("DDDDDD" placeholder).
+    const lines = sprite.slice();
+    if (!SAFE.opened) {
+      // Show: number of fragments collected so far in the safe window.
+      const known = collectedCodes.map(c => c || '··').join('');
+      lines[3] = '║│' + known + '│║';
+    }
+    putSpriteColored(SAFE.x, baseY, lines, colors);
+    // Subtle glow on the dial
+    if (!SAFE.opened && (((time * 4) | 0) % 2) === 0) {
+      putChar(SAFE.x + 4, baseY + 4, '◉', '#ffd56b');
+    }
+    if (SAFE.opened) {
+      // Glow halo
+      ctx.fillStyle = 'rgba(255,213,107,0.10)';
+      ctx.fillRect((SAFE.x - 1) * CHAR_W, (baseY - 1) * CHAR_H, 12 * CHAR_W, 8 * CHAR_H);
+    }
+  }
+
+  function drawCaveDecor(time) {
+    // Stalactites hang from row 1 down
+    for (const s of STALACTITES) {
+      putSpriteColored(s.x, 0, STALACTITE, STALACTITE_COLORS);
+    }
+    // Stalagmites sit on a floor
+    for (const s of STALAGMITES) {
+      const y = FLOORS[s.floorIdx].y - 2;
+      putSpriteColored(s.x, y, STALAGMITE, STALAGMITE_COLORS);
+    }
+    // Crystals pulse on cave walls
+    for (const c of CRYSTALS) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * 2 + c.x * 0.4);
+      const base = CRYSTAL_COLORS[c.color] || '#c060e0';
+      const a = (0.55 + pulse * 0.45).toFixed(2);
+      const col = `rgba(${parseInt(base.slice(1,3),16)},${parseInt(base.slice(3,5),16)},${parseInt(base.slice(5,7),16)},${a})`;
+      putChar(c.x, c.y, '◆', col);
+      if (pulse > 0.7) putChar(c.x, c.y - 1, '·', col);
+    }
+    // Torches with flickering flame
+    for (const t of TORCHES) {
+      const y = FLOORS[t.floorIdx].y - 3;
+      const flick = (((time * 14 + t.x * 0.3) | 0) % 2) === 0;
+      putChar(t.x, y,     flick ? '▲' : '△', flick ? TORCH_FIRE_COLORS[0] : TORCH_FIRE_COLORS[1]);
+      putChar(t.x, y + 1, '│', TORCH_STICK_COLOR);
+      // Glow halo
+      const gx = (t.x + 0.5) * CHAR_W;
+      const gy = (y + 0.5) * CHAR_H;
+      const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, 60);
+      grad.addColorStop(0, 'rgba(255,160,60,0.20)');
+      grad.addColorStop(1, 'rgba(255,160,60,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(gx - 60, gy - 60, 120, 120);
+    }
+  }
+
+  function drawCodeHUD() {
+    // Show collected fragments next to the hearts.
+    const labelStart = 8;
+    putString(labelStart, 0, 'CODE:', '#9aa6b8');
+    for (let i = 0; i < 3; i++) {
+      const txt = collectedCodes[i] || '··';
+      const col = collectedCodes[i] ? '#ffd56b' : '#3a4256';
+      putString(labelStart + 6 + i * 3, 0, txt, col);
+    }
+    if (safeOpened) putString(labelStart + 16, 0, '★', '#ffd56b');
+  }
+
+  function drawCodeModal(time) {
+    if (!codeInputMode) {
+      // If we have a transient codeMessage left over after modal closed, fade it.
+      if (codeMessageTimer > 0 && codeMessage) {
+        const col = COLS / 2 - codeMessage.length / 2;
+        putString(Math.floor(col), Math.floor(ROWS / 2), codeMessage, '#ffd56b');
+      }
+      return;
+    }
+    // Dim the playfield
+    ctx.fillStyle = 'rgba(2,4,8,0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const W = 40;
+    const inner = (s) => '║' + s + ' '.repeat(W - 2 - s.length) + '║';
+    const center = (s) => {
+      const pad = W - 2 - s.length;
+      const l = Math.floor(pad / 2), r = pad - l;
+      return '║' + ' '.repeat(l) + s + ' '.repeat(r) + '║';
+    };
+    const slotPlaceholder = '[ _ _ _ _ _ _ ]';
+    const box = [
+      '╔' + '═'.repeat(W - 2) + '╗',
+      inner(''),
+      center('ENTER 6-DIGIT SAFE CODE'),
+      inner(''),
+      center(slotPlaceholder),
+      inner(''),
+      center('0-9 type · ENTER submit · ESC'),
+      inner(''),
+      '╚' + '═'.repeat(W - 2) + '╝',
+    ];
+    const left = Math.floor((COLS - W) / 2);
+    const top  = Math.floor((ROWS - box.length) / 2);
+    // Shake offset
+    const sx = codeShake > 0 ? Math.round((Math.random() - 0.5) * 2) : 0;
+    for (let r = 0; r < box.length; r++) {
+      putString(left + sx, top + r, box[r], '#dbe2f0');
+    }
+    // Overlay the live digits on top of the slotPlaceholder row.
+    const slotsRow = top + 4;
+    const slotStartCol = left + Math.floor((W - slotPlaceholder.length) / 2) + 2;  // after "[ "
+    for (let i = 0; i < 6; i++) {
+      const ch = codeBuffer[i] || '_';
+      const col = codeBuffer[i] ? '#ffd56b' : '#586278';
+      putChar(slotStartCol + i * 2 + sx, slotsRow, ch, col);
+    }
+    // Message
+    if (codeMessage && codeMessageTimer > 0) {
+      const m = codeMessage;
+      const mc = Math.floor((COLS - m.length) / 2) + sx;
+      const isErr = m.startsWith('WRONG');
+      putString(mc, top + box.length + 1, m, isErr ? '#ff7080' : '#ffd56b');
     }
   }
 
@@ -1704,6 +2141,9 @@
     // Screen 1 specific: river water
     if (screen === 1) drawRiver(time);
 
+    // Cave decor (stalactites etc.) sits behind floors but in front of bg
+    if (screen === 3) drawCaveDecor(time);
+
     // Foreground world
     for (const t of TREES) drawTree(t);
     drawFloors();
@@ -1717,6 +2157,9 @@
 
     drawChest();
     drawKey(time);
+    drawPotion(time);
+    drawFragment(time);
+    drawSafe(time);
 
     // Enemies behind player so player passes in front during overlap.
     for (const e of enemies) drawEnemy(e, time);
@@ -1728,16 +2171,31 @@
 
     if (screen === 0) drawGround();
     drawHP();
+    drawCodeHUD();
     drawScreenLabel();
+    drawSafeHint();
+    drawCodeModal(time);
+  }
+
+  function drawSafeHint() {
+    if (!SAFE || SAFE.opened || codeInputMode) return;
+    const sy = FLOORS[SAFE.floorIdx].y - 6;
+    const cx = SAFE.x + 4;
+    const dx = (player.x + 1) - cx;
+    const dy = (player.y + 1.5) - (sy + 2.5);
+    if (Math.abs(dx) < 5 && Math.abs(dy) < 4) {
+      const t = 'PRESS [E] TO ENTER CODE';
+      putString(Math.floor(cx - t.length / 2), sy - 1, t, '#ffd56b');
+    }
   }
 
   function drawScreenLabel() {
-    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS'];
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS'];
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'b4';
+    const v = 'b5';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
