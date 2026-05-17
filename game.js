@@ -5,17 +5,17 @@
   // ───────────────────────────────────────────────────────────────────────
   //  CANVAS / GRID
   // ───────────────────────────────────────────────────────────────────────
-  const CHAR_W = 10;
-  const CHAR_H = 18;
-  const COLS = 100;
-  const ROWS = 34;
+  const CHAR_W = 5;
+  const CHAR_H = 9;
+  const COLS = 200;
+  const ROWS = 68;
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   canvas.width = COLS * CHAR_W;
   canvas.height = ROWS * CHAR_H;
 
-  const FONT = '16px "Cascadia Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "Consolas", "Menlo", monospace';
+  const FONT = '8px "Cascadia Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "Consolas", "Menlo", monospace';
   ctx.font = FONT;
   ctx.textBaseline = 'top';
   ctx.textAlign = 'center';
@@ -119,57 +119,57 @@
     if (n === 0) {
       // ───── Screen 0: Forest at night
       setFloors([
-        { y: 6,  left: 1, right: 98, theme: 'wood-light' },
-        { y: 18, left: 1, right: 98, theme: 'wood-mid' },
-        { y: 30, left: 1, right: 98, theme: 'wood-dark' },
+        { y: 12,  left: 2, right: 196, theme: 'wood-light' },
+        { y: 36, left: 2, right: 196, theme: 'wood-mid' },
+        { y: 60, left: 2, right: 196, theme: 'wood-dark' },
       ]);
       LADDERS = [
-        { x: 22, top: 6,  bottom: 18 },
-        { x: 70, top: 6,  bottom: 18 },
-        { x: 38, top: 18, bottom: 30 },
-        { x: 84, top: 18, bottom: 30 },
+        { x: 44, top: 12,  bottom: 36 },
+        { x: 140, top: 12,  bottom: 36 },
+        { x: 76, top: 36, bottom: 60 },
+        { x: 168, top: 36, bottom: 60 },
       ];
       TREES = [
-        { x: 8,  floorIdx: 2, kind: 'pine' },
-        { x: 50, floorIdx: 2, kind: 'round' },
-        { x: 92, floorIdx: 2, kind: 'pine' },
-        { x: 15, floorIdx: 1, kind: 'round' },
-        { x: 56, floorIdx: 1, kind: 'pine' },
-        { x: 90, floorIdx: 1, kind: 'round' },
-        { x: 10, floorIdx: 0, kind: 'pine' },
-        { x: 80, floorIdx: 0, kind: 'round' },
+        { x: 16,  floorIdx: 2, kind: 'pine' },
+        { x: 100, floorIdx: 2, kind: 'round' },
+        { x: 184, floorIdx: 2, kind: 'pine' },
+        { x: 30, floorIdx: 1, kind: 'round' },
+        { x: 112, floorIdx: 1, kind: 'pine' },
+        { x: 180, floorIdx: 1, kind: 'round' },
+        { x: 20, floorIdx: 0, kind: 'pine' },
+        { x: 160, floorIdx: 0, kind: 'round' },
       ];
       BUSHES = [
-        { x: 18, floorIdx: 2 }, { x: 30, floorIdx: 2 },
-        { x: 60, floorIdx: 2 }, { x: 76, floorIdx: 2 },
-        { x: 26, floorIdx: 1 }, { x: 45, floorIdx: 1 },
-        { x: 76, floorIdx: 1 }, { x: 4,  floorIdx: 1 },
-        { x: 20, floorIdx: 0 }, { x: 70, floorIdx: 0 },
+        { x: 36, floorIdx: 2 }, { x: 60, floorIdx: 2 },
+        { x: 120, floorIdx: 2 }, { x: 152, floorIdx: 2 },
+        { x: 52, floorIdx: 1 }, { x: 90, floorIdx: 1 },
+        { x: 152, floorIdx: 1 }, { x: 8,  floorIdx: 1 },
+        { x: 40, floorIdx: 0 }, { x: 140, floorIdx: 0 },
       ];
       ROCKS = [
-        { x: 42, floorIdx: 2 }, { x: 88, floorIdx: 2 },
-        { x: 64, floorIdx: 1 }, { x: 30, floorIdx: 0 },
+        { x: 84, floorIdx: 2 }, { x: 176, floorIdx: 2 },
+        { x: 128, floorIdx: 1 }, { x: 60, floorIdx: 0 },
       ];
-      CHEST = { x: 44, floorIdx: 0 };
-      KEY   = { x: 52, floorIdx: 0, collected: false };
+      CHEST = { x: 88, floorIdx: 0 };
+      KEY   = { x: 104, floorIdx: 0, collected: false };
       // Optional code fragment (digits "47") + healing potion
-      FRAGMENT = { x: 36, floorIdx: 1, digits: FRAGMENT_DIGITS[0], levelIdx: 0, collected: !!collectedCodes[0] };
-      POTION   = { x: 64, floorIdx: 2, collected: false };
+      FRAGMENT = { x: 72, floorIdx: 1, digits: FRAGMENT_DIGITS[0], levelIdx: 0, collected: !!collectedCodes[0] };
+      POTION   = { x: 128, floorIdx: 2, collected: false };
       GOAL  = 'pickup-key';
 
     } else if (n === 1) {
       // ───── Screen 1: River crossing with a boat
       setFloors([
-        { y: 26, left: 1,  right: 24, theme: 'bank' },  // left bank
-        { y: 26, left: 76, right: 98, theme: 'bank' },  // right bank
+        { y: 52, left: 2,  right: 48, theme: 'bank' },  // left bank
+        { y: 52, left: 152, right: 196, theme: 'bank' },  // right bank
       ]);
-      RIVER = { left: 24, right: 76, top: 26 };
+      RIVER = { left: 48, right: 152, top: 52 };
       BOAT = {
-        baseX: 50, baseY: 25,
-        x: 30,             // updated each frame
-        y: 25,
+        baseX: 100, baseY: 50,
+        x: 60,             // updated each frame
+        y: 50,
         w: 7, h: 1,
-        range: 22,         // half-amplitude
+        range: 44,         // half-amplitude
         phase: -Math.PI / 2,
         speed: 0.42,       // radians per second
         prevX: 30,
@@ -179,32 +179,32 @@
       FLOOR_Y = FLOORS.map(f => f.y);
       // No ladders; decorations.
       TREES = [
-        { x: 8,  floorIdx: 0, kind: 'round' },
-        { x: 18, floorIdx: 0, kind: 'pine' },
-        { x: 82, floorIdx: 1, kind: 'pine' },
-        { x: 92, floorIdx: 1, kind: 'round' },
+        { x: 16,  floorIdx: 0, kind: 'round' },
+        { x: 36, floorIdx: 0, kind: 'pine' },
+        { x: 164, floorIdx: 1, kind: 'pine' },
+        { x: 184, floorIdx: 1, kind: 'round' },
       ];
       BUSHES = [
-        { x: 4,  floorIdx: 0 }, { x: 14, floorIdx: 0 },
-        { x: 86, floorIdx: 1 }, { x: 96, floorIdx: 1 },
+        { x: 8,  floorIdx: 0 }, { x: 28, floorIdx: 0 },
+        { x: 172, floorIdx: 1 }, { x: 192, floorIdx: 1 },
       ];
       ROCKS = [
-        { x: 22, floorIdx: 0 }, { x: 78, floorIdx: 1 },
+        { x: 44, floorIdx: 0 }, { x: 156, floorIdx: 1 },
       ];
-      FRAGMENT = { x: 10, floorIdx: 0, digits: FRAGMENT_DIGITS[1], levelIdx: 1, collected: !!collectedCodes[1] };
-      POTION   = { x: 90, floorIdx: 1, collected: false };
+      FRAGMENT = { x: 20, floorIdx: 0, digits: FRAGMENT_DIGITS[1], levelIdx: 1, collected: !!collectedCodes[1] };
+      POTION   = { x: 180, floorIdx: 1, collected: false };
       GOAL = 'reach-right';
 
     } else if (n === 2) {
       // ───── Screen 2: Flying platforms in the sky
       setFloors([
-        { y: 30, left: 1,  right: 14, theme: 'cloud' },   // start
-        { y: 26, left: 18, right: 26, theme: 'cloud', oscY: { phase: 0,        amp: 1.2, speed: 1.0 } },
-        { y: 22, left: 32, right: 40, theme: 'cloud' },
-        { y: 18, left: 46, right: 54, theme: 'cloud', oscY: { phase: Math.PI/2,amp: 1.4, speed: 0.8 } },
-        { y: 14, left: 60, right: 68, theme: 'cloud' },
-        { y: 10, left: 74, right: 82, theme: 'cloud', oscY: { phase: Math.PI,  amp: 1.2, speed: 1.2 } },
-        { y: 6,  left: 86, right: 98, theme: 'cloud' },   // goal
+        { y: 60, left: 2,  right: 28, theme: 'cloud' },   // start
+        { y: 52, left: 36, right: 52, theme: 'cloud', oscY: { phase: 0,        amp: 2.4, speed: 1.0 } },
+        { y: 44, left: 64, right: 80, theme: 'cloud' },
+        { y: 36, left: 92, right: 108, theme: 'cloud', oscY: { phase: Math.PI/2,amp: 2.8, speed: 0.8 } },
+        { y: 28, left: 120, right: 136, theme: 'cloud' },
+        { y: 20, left: 148, right: 164, theme: 'cloud', oscY: { phase: Math.PI,  amp: 2.4, speed: 1.2 } },
+        { y: 12,  left: 172, right: 196, theme: 'cloud' },   // goal
       ]);
       // Stash baseY and originals for oscillation.
       for (const f of FLOORS) {
@@ -212,8 +212,8 @@
       }
       // No final key here any more — sky goal is now reach-right (advance
       // into the cave).  Fragment + potion live on the path.
-      FRAGMENT = { x: 36, floorIdx: 2, digits: FRAGMENT_DIGITS[2], levelIdx: 2, collected: !!collectedCodes[2] };
-      POTION   = { x: 62, floorIdx: 4, collected: false };
+      FRAGMENT = { x: 72, floorIdx: 2, digits: FRAGMENT_DIGITS[2], levelIdx: 2, collected: !!collectedCodes[2] };
+      POTION   = { x: 124, floorIdx: 4, collected: false };
       BUSHES = [];
       ROCKS  = [];
       TREES  = [];
@@ -223,66 +223,66 @@
     } else if (n === 3) {
       // ───── Screen 3: Cave with the safe
       setFloors([
-        { y: 30, left: 1,  right: 98, theme: 'stone' },  // 0  main bottom
-        { y: 20, left: 22, right: 78, theme: 'stone' },  // 1  mid (safe here)
-        { y: 10, left: 1,  right: 32, theme: 'stone' },  // 2  upper-left
-        { y: 10, left: 66, right: 98, theme: 'stone' },  // 3  upper-right (key here)
+        { y: 60, left: 2,  right: 196, theme: 'stone' },  // 0  main bottom
+        { y: 40, left: 44, right: 156, theme: 'stone' },  // 1  mid (safe here)
+        { y: 20, left: 2,  right: 64, theme: 'stone' },  // 2  upper-left
+        { y: 20, left: 132, right: 196, theme: 'stone' },  // 3  upper-right (key here)
       ]);
       LADDERS = [
-        { x: 30, top: 20, bottom: 30 },
-        { x: 70, top: 20, bottom: 30 },
-        { x: 26, top: 10, bottom: 20 },
-        { x: 72, top: 10, bottom: 20 },
+        { x: 60, top: 40, bottom: 60 },
+        { x: 140, top: 40, bottom: 60 },
+        { x: 52, top: 20, bottom: 40 },
+        { x: 144, top: 20, bottom: 40 },
       ];
       // Decorations: stalactites along ceiling, stalagmites on bottom,
       // crystals embedded in walls, torches for atmosphere.
       STALACTITES = [
-        { x: 6 }, { x: 14 }, { x: 22 }, { x: 38 }, { x: 50 },
-        { x: 62 }, { x: 76 }, { x: 86 }, { x: 94 },
+        { x: 12 }, { x: 28 }, { x: 44 }, { x: 76 }, { x: 100 },
+        { x: 124 }, { x: 152 }, { x: 172 }, { x: 188 },
       ];
       STALAGMITES = [
-        { x: 8, floorIdx: 0 }, { x: 16, floorIdx: 0 }, { x: 78, floorIdx: 0 },
-        { x: 88, floorIdx: 0 }, { x: 40, floorIdx: 1 }, { x: 60, floorIdx: 1 },
+        { x: 16, floorIdx: 0 }, { x: 32, floorIdx: 0 }, { x: 156, floorIdx: 0 },
+        { x: 176, floorIdx: 0 }, { x: 80, floorIdx: 1 }, { x: 120, floorIdx: 1 },
       ];
       CRYSTALS = [
-        { x: 4,  y: 6,  color: 'teal'   },
-        { x: 96, y: 6,  color: 'purple' },
-        { x: 12, y: 16, color: 'pink'   },
-        { x: 88, y: 16, color: 'teal'   },
-        { x: 4,  y: 26, color: 'purple' },
-        { x: 96, y: 26, color: 'pink'   },
+        { x: 8,  y: 12,  color: 'teal'   },
+        { x: 192, y: 12,  color: 'purple' },
+        { x: 24, y: 32, color: 'pink'   },
+        { x: 176, y: 32, color: 'teal'   },
+        { x: 8,  y: 52, color: 'purple' },
+        { x: 192, y: 52, color: 'pink'   },
       ];
       TORCHES = [
-        { x: 18, floorIdx: 0 }, { x: 80, floorIdx: 0 },
-        { x: 30, floorIdx: 1 }, { x: 70, floorIdx: 1 },
+        { x: 36, floorIdx: 0 }, { x: 160, floorIdx: 0 },
+        { x: 60, floorIdx: 1 }, { x: 140, floorIdx: 1 },
       ];
-      CHEST = { x: 88, floorIdx: 3 };
-      KEY   = { x: 92, floorIdx: 3, collected: false };
-      POTION = { x: 50, floorIdx: 0, collected: false };
-      SAFE = { x: 48, floorIdx: 1, opened: safeOpened };
+      CHEST = { x: 176, floorIdx: 3 };
+      KEY   = { x: 184, floorIdx: 3, collected: false };
+      POTION = { x: 100, floorIdx: 0, collected: false };
+      SAFE = { x: 96, floorIdx: 1, opened: safeOpened };
       // Cave's key now opens the way to the snow boss arena.
       GOAL = 'pickup-key';
 
     } else if (n === 4) {
       // ───── Screen 4: Snowy boss arena (3 floors + ladders)
       setFloors([
-        { y: 6,  left: 1, right: 98, theme: 'snow' },
-        { y: 18, left: 1, right: 98, theme: 'snow' },
-        { y: 30, left: 1, right: 98, theme: 'snow' },
+        { y: 12,  left: 2, right: 196, theme: 'snow' },
+        { y: 36, left: 2, right: 196, theme: 'snow' },
+        { y: 60, left: 2, right: 196, theme: 'snow' },
       ]);
       LADDERS = [
-        { x: 24, top: 6,  bottom: 18 },
-        { x: 76, top: 6,  bottom: 18 },
-        { x: 40, top: 18, bottom: 30 },
-        { x: 86, top: 18, bottom: 30 },
+        { x: 48, top: 12,  bottom: 36 },
+        { x: 152, top: 12,  bottom: 36 },
+        { x: 80, top: 36, bottom: 60 },
+        { x: 172, top: 36, bottom: 60 },
       ];
       TREES = [
-        { x: 10, floorIdx: 2, kind: 'snow-pine' },
-        { x: 52, floorIdx: 2, kind: 'snow-pine' },
-        { x: 92, floorIdx: 2, kind: 'snow-pine' },
-        { x: 14, floorIdx: 1, kind: 'snow-pine' },
-        { x: 58, floorIdx: 1, kind: 'snow-pine' },
-        { x: 90, floorIdx: 1, kind: 'snow-pine' },
+        { x: 20, floorIdx: 2, kind: 'snow-pine' },
+        { x: 104, floorIdx: 2, kind: 'snow-pine' },
+        { x: 184, floorIdx: 2, kind: 'snow-pine' },
+        { x: 28, floorIdx: 1, kind: 'snow-pine' },
+        { x: 116, floorIdx: 1, kind: 'snow-pine' },
+        { x: 180, floorIdx: 1, kind: 'snow-pine' },
       ];
       BUSHES = [];
       ROCKS = [];
@@ -292,8 +292,8 @@
         SNOWFLAKES.push({
           x: Math.random() * COLS,
           y: Math.random() * ROWS,
-          vy: 1.5 + Math.random() * 2.5,
-          vx: -0.4 + Math.random() * 0.8,
+          vy: 3 + Math.random() * 5,
+          vx: -0.8 + Math.random() * 1.6,
           ch: Math.random() < 0.5 ? '*' : (Math.random() < 0.5 ? '·' : '❄'),
           phase: Math.random() * Math.PI * 2,
         });
@@ -303,12 +303,9 @@
       dog = null;
     }
 
-    // Player starting position
-    if (n === 0)      { player.x = 6;  player.y = FLOORS[2].y - 3; player.floorIdx = 2; }
-    else if (n === 1) { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
-    else if (n === 2) { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
-    else if (n === 3) { player.x = 6;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
-    else              { player.x = 6;  player.y = FLOORS[2].y - 3; player.floorIdx = 2; }
+    // Player starting position (shared with respawnPlayer())
+    const sp = spawnPosFor(n);
+    player.x = sp.x; player.y = sp.y; player.floorIdx = sp.floorIdx;
     player.vx = 0; player.vy = 0;
     player.state = 'stand'; player.facing = 1;
     player.onLadder = false; player.ladderIdx = -1;
@@ -388,69 +385,69 @@
   function spawnEnemiesForScreen(n) {
     if (n === 0) {
       enemies = [
-        { type: 'slime', x: 36, y: FLOORS[2].y - 2, vx: 4.5, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 2, minX: 24, maxX: 70, hop: 0, hurt: 0, dead: 0,
+        { type: 'slime', x: 72, y: FLOORS[2].y - 2, vx: 9, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 2, minX: 48, maxX: 140, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[2].y - 2 },
-        { type: 'slime', x: 70, y: FLOORS[0].y - 2, vx: -4, facing: -1, hp: 1, maxHp: 1,
-          floorIdx: 0, minX: 58, maxX: 90, hop: 0, hurt: 0, dead: 0,
+        { type: 'slime', x: 140, y: FLOORS[0].y - 2, vx: -8, facing: -1, hp: 1, maxHp: 1,
+          floorIdx: 0, minX: 116, maxX: 180, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[0].y - 2 },
-        { type: 'skel', x: 56, y: FLOORS[1].y - 3, vx: -6, facing: -1, hp: 2, maxHp: 2,
-          floorIdx: 1, minX: 26, maxX: 80, walk: 0, hurt: 0, dead: 0,
+        { type: 'skel', x: 112, y: FLOORS[1].y - 3, vx: -12, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 1, minX: 52, maxX: 160, walk: 0, hurt: 0, dead: 0,
           w: 3, h: 3, originY: FLOORS[1].y - 3 },
-        { type: 'skel', x: 84, y: FLOORS[2].y - 3, vx: 5, facing: 1, hp: 2, maxHp: 2,
-          floorIdx: 2, minX: 74, maxX: 95, walk: 0, hurt: 0, dead: 0,
+        { type: 'skel', x: 168, y: FLOORS[2].y - 3, vx: 10, facing: 1, hp: 2, maxHp: 2,
+          floorIdx: 2, minX: 148, maxX: 190, walk: 0, hurt: 0, dead: 0,
           w: 3, h: 3, originY: FLOORS[2].y - 3 },
-        { type: 'ghost', cx: 50, cy: 13, rx: 14, ry: 4,
-          x: 49, y: 13, phase: 0, pSpeed: 0.9, hp: 1, maxHp: 1,
+        { type: 'ghost', cx: 100, cy: 26, rx: 28, ry: 8,
+          x: 98, y: 26, phase: 0, pSpeed: 0.9, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
     } else if (n === 1) {
       // River screen: two patrolling slimes on the banks + a ghost over water
       enemies = [
-        { type: 'slime', x: 14, y: FLOORS[0].y - 2, vx: 3.5, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 0, minX: 4, maxX: 22, hop: 0, hurt: 0, dead: 0,
+        { type: 'slime', x: 28, y: FLOORS[0].y - 2, vx: 7, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 0, minX: 8, maxX: 44, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[0].y - 2 },
-        { type: 'slime', x: 82, y: FLOORS[1].y - 2, vx: 3.5, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 1, minX: 78, maxX: 94, hop: 0, hurt: 0, dead: 0,
+        { type: 'slime', x: 164, y: FLOORS[1].y - 2, vx: 7, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 1, minX: 156, maxX: 188, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[1].y - 2 },
-        { type: 'ghost', cx: 50, cy: 19, rx: 18, ry: 3,
-          x: 49, y: 19, phase: 0, pSpeed: 1.1, hp: 1, maxHp: 1,
+        { type: 'ghost', cx: 100, cy: 38, rx: 36, ry: 6,
+          x: 98, y: 38, phase: 0, pSpeed: 1.1, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
     } else if (n === 2) {
       // Sky screen: a couple of ghosts patrolling between platforms
       enemies = [
-        { type: 'ghost', cx: 35, cy: 22, rx: 10, ry: 3,
-          x: 34, y: 22, phase: 0, pSpeed: 1.2, hp: 1, maxHp: 1,
+        { type: 'ghost', cx: 70, cy: 44, rx: 20, ry: 6,
+          x: 68, y: 44, phase: 0, pSpeed: 1.2, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
-        { type: 'ghost', cx: 65, cy: 14, rx: 8, ry: 2,
-          x: 64, y: 14, phase: Math.PI, pSpeed: 1.0, hp: 1, maxHp: 1,
+        { type: 'ghost', cx: 130, cy: 28, rx: 16, ry: 4,
+          x: 128, y: 28, phase: Math.PI, pSpeed: 1.0, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
-        { type: 'slime', x: 75, y: FLOORS[5].y - 2, vx: 2.5, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 5, minX: 74, maxX: 78, hop: 0, hurt: 0, dead: 0,
+        { type: 'slime', x: 150, y: FLOORS[5].y - 2, vx: 5, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 5, minX: 148, maxX: 156, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[5].y - 2 },
       ];
     } else if (n === 3) {
       // Cave screen: two skeletons + ghost + slime
       enemies = [
-        { type: 'skel', x: 50, y: FLOORS[0].y - 3, vx: 5, facing: 1, hp: 2, maxHp: 2,
-          floorIdx: 0, minX: 22, maxX: 78, walk: 0, hurt: 0, dead: 0,
+        { type: 'skel', x: 100, y: FLOORS[0].y - 3, vx: 10, facing: 1, hp: 2, maxHp: 2,
+          floorIdx: 0, minX: 44, maxX: 156, walk: 0, hurt: 0, dead: 0,
           w: 3, h: 3, originY: FLOORS[0].y - 3 },
-        { type: 'skel', x: 38, y: FLOORS[1].y - 3, vx: -4, facing: -1, hp: 2, maxHp: 2,
-          floorIdx: 1, minX: 24, maxX: 60, walk: 0, hurt: 0, dead: 0,
+        { type: 'skel', x: 76, y: FLOORS[1].y - 3, vx: -8, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 1, minX: 48, maxX: 120, walk: 0, hurt: 0, dead: 0,
           w: 3, h: 3, originY: FLOORS[1].y - 3 },
-        { type: 'slime', x: 80, y: FLOORS[3].y - 2, vx: 3.5, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 3, minX: 68, maxX: 92, hop: 0, hurt: 0, dead: 0,
+        { type: 'slime', x: 160, y: FLOORS[3].y - 2, vx: 7, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 3, minX: 136, maxX: 184, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[3].y - 2 },
-        { type: 'ghost', cx: 50, cy: 14, rx: 16, ry: 3,
-          x: 49, y: 14, phase: 0, pSpeed: 1.0, hp: 1, maxHp: 1,
+        { type: 'ghost', cx: 100, cy: 28, rx: 32, ry: 6,
+          x: 98, y: 28, phase: 0, pSpeed: 1.0, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
     } else if (n === 4) {
       // Snowy boss arena — just the snowman.
       enemies = [
         { type: 'snowman',
-          x: 70, y: FLOORS[0].y - 4,
+          x: 140, y: FLOORS[0].y - 4,
           vx: 0, facing: -1,
           hp: 10, maxHp: 10, hurt: 0, dead: 0,
           w: 5, h: 4,
@@ -475,14 +472,14 @@
   for (let i = 0; i < 70; i++) {
     STARS.push({
       x: Math.random() * COLS,
-      y: Math.random() * 5.5,
+      y: Math.random() * 11,
       ch: STAR_CHARS[(Math.random() * STAR_CHARS.length) | 0],
       phase: Math.random() * Math.PI * 2,
       speed: 0.5 + Math.random() * 1.5,
     });
   }
 
-  const MOON = { x: 82, y: 1 };
+  const MOON = { x: 164, y: 2 };
   const MOON_SPRITE = [
     '  ╭───╮ ',
     ' (  ◔  )',
@@ -517,8 +514,8 @@
   for (let i = 0; i < 5; i++) {
     CLOUDS.push({
       x: Math.random() * COLS - 4,
-      y: 0 + ((Math.random() * 3) | 0),
-      speed: 0.6 + Math.random() * 1.4,
+      y: 0 + ((Math.random() * 6) | 0),
+      speed: 1.2 + Math.random() * 2.8,
       shape: (Math.random() * CLOUD_SHAPES.length) | 0,
       colors: Math.random() < 0.5
         ? ['#3a4360', '#262c40']
@@ -535,10 +532,10 @@
   const FIREFLIES = [];
   for (let i = 0; i < 16; i++) {
     FIREFLIES.push({
-      cx: 4 + Math.random() * (COLS - 8),
-      cy: 8 + Math.random() * 20,
-      rx: 2 + Math.random() * 5,
-      ry: 1 + Math.random() * 2,
+      cx: 8 + Math.random() * (COLS - 16),
+      cy: 16 + Math.random() * 40,
+      rx: 4 + Math.random() * 10,
+      ry: 2 + Math.random() * 4,
       phase: Math.random() * Math.PI * 2,
       pSpeed: 0.5 + Math.random() * 1.2,
       blinkOff: Math.random() * Math.PI * 2,
@@ -555,7 +552,7 @@
   // The player sprite is 3 rows tall, 3 cols wide.  `x` and `y` are the
   // top-left cell of the sprite (floats so motion looks smooth).
   const player = {
-    x: 6,
+    x: 12,
     y: FLOOR_Y[2] - 3,
     vx: 0,
     vy: 0,
@@ -570,6 +567,8 @@
     blinkTimer: 0,
     hp: 3,
     maxHp: 3,
+    lives: 3,
+    maxLives: 3,
     invul: 0,         // seconds of invulnerability after a hit
     attack: 0,        // seconds remaining in attack swing
     attackCool: 0,    // brief cooldown so X doesn't auto-spam
@@ -581,11 +580,11 @@
   const PLAYER_INVUL = 1.0;
 
   const PHYS = {
-    walkSpeed: 12,        // cells per second
-    climbSpeed: 8,
-    jumpV: -28,           // initial vy on jump
-    gravity: 65,
-    maxFall: 32,
+    walkSpeed: 24,        // cells per second
+    climbSpeed: 16,
+    jumpV: -56,           // initial vy on jump
+    gravity: 130,
+    maxFall: 64,
   };
 
   // ───────────────────────────────────────────────────────────────────────
@@ -897,11 +896,11 @@
     const chars = opts.chars || ['·', '*', '✦', '+', '★'];
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
-      const s = 4 + Math.random() * 10;
+      const s = 8 + Math.random() * 20;
       particles.push({
         x: cx, y: cy,
         vx: Math.cos(a) * s,
-        vy: Math.sin(a) * s - 4,
+        vy: Math.sin(a) * s - 8,
         ch: chars[(Math.random() * chars.length) | 0],
         color: colors[(Math.random() * colors.length) | 0],
         life: 0.6 + Math.random() * 0.6,
@@ -914,7 +913,7 @@
       const p = particles[i];
       p.age += dt;
       if (p.age >= p.life) { particles.splice(i, 1); continue; }
-      p.vy += dt * 18;        // gravity
+      p.vy += dt * 36;        // gravity
       p.x += p.vx * dt;
       p.y += p.vy * dt;
     }
@@ -936,7 +935,7 @@
     for (const c of CLOUDS) {
       c.x += c.speed * dt;
       const shapeW = CLOUD_SHAPES[c.shape][0].length;
-      if (c.x > COLS + 1) c.x = -shapeW - Math.random() * 10;
+      if (c.x > COLS + 1) c.x = -shapeW - Math.random() * 20;
     }
   }
   function updateShootingStars(dt) {
@@ -944,9 +943,9 @@
       const fromLeft = Math.random() < 0.5;
       SHOOTING_STARS.push({
         x: fromLeft ? -2 : COLS + 2,
-        y: Math.random() * 4,
-        vx: fromLeft ? 55 + Math.random() * 25 : -(55 + Math.random() * 25),
-        vy: 12 + Math.random() * 18,
+        y: Math.random() * 8,
+        vx: fromLeft ? 110 + Math.random() * 50 : -(110 + Math.random() * 50),
+        vy: 24 + Math.random() * 36,
         trail: [],
         age: 0,
         life: 0.7 + Math.random() * 0.3,
@@ -972,8 +971,8 @@
       const goingRight = Math.random() < 0.5;
       BATS.push({
         x: goingRight ? -3 : COLS + 3,
-        y: 1 + Math.random() * 3,
-        vx: goingRight ? 9 + Math.random() * 4 : -(9 + Math.random() * 4),
+        y: 2 + Math.random() * 6,
+        vx: goingRight ? 18 + Math.random() * 8 : -(18 + Math.random() * 8),
         yPhase: Math.random() * Math.PI * 2,
         anim: 0,
       });
@@ -1164,8 +1163,40 @@
     gameState = 'playing';
   });
 
+  function spawnPosFor(n) {
+    if (n === 0) return { x: 12,  y: FLOORS[2].y - 3, floorIdx: 2 };
+    if (n === 1) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
+    if (n === 2) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
+    if (n === 3) return { x: 12,  y: FLOORS[0].y - 3, floorIdx: 0 };
+    return            { x: 12,  y: FLOORS[2].y - 3, floorIdx: 2 };
+  }
+
+  function respawnPlayer() {
+    const sp = spawnPosFor(screen);
+    player.x = sp.x; player.y = sp.y; player.floorIdx = sp.floorIdx;
+    player.vx = 0; player.vy = 0;
+    player.facing = 1;
+    player.state = 'stand';
+    player.onLadder = false;
+    player.ladderIdx = -1;
+    player.onBoat = false;
+    player.hp = player.maxHp;
+    player.invul = PLAYER_INVUL * 2;   // generous post-respawn grace
+    player.attack = 0;
+    player.attackCool = 0;
+    player.hurtFlash = 0;
+    player.dead = false;
+    // Sparkle to make the respawn visible.
+    spawnParticles(player.x + 1, player.y + 1, {
+      count: 26, colors: ['#7fc8ff','#ffffff','#a8e0ff'], chars: ['*','+','✦','·'],
+    });
+    blip(660, 0.10, 'square', 0.05);
+    setTimeout(() => blip(880, 0.12, 'triangle', 0.05), 90);
+  }
+
   function resetGame() {
     player.hp = player.maxHp;
+    player.lives = player.maxLives;
     player.invul = 0;
     player.attack = 0;
     player.attackCool = 0;
@@ -1361,7 +1392,7 @@
       const keyRow = FLOORS[KEY.floorIdx].y - 2;
       const dx = (player.x + 1) - (KEY.x + 1);
       const dy = (player.y + 1.5) - (keyRow + 0.5);
-      if (Math.abs(dx) < 2 && Math.abs(dy) < 2.5) {
+      if (Math.abs(dx) < 4 && Math.abs(dy) < 5) {
         KEY.collected = true;
         pickupSound();
         spawnParticles(KEY.x + 1, keyRow);
@@ -1383,7 +1414,7 @@
         }
       }
     }
-    if (GOAL === 'reach-right' && player.x >= COLS - 4 && !player.onLadder && player.vy === 0) {
+    if (GOAL === 'reach-right' && player.x >= COLS - 8 && !player.onLadder && player.vy === 0) {
       advanceScreen();
     }
     if (GOAL === 'defeat-snowman' && gameState === 'playing') {
@@ -1411,7 +1442,7 @@
       const py = FLOORS[POTION.floorIdx].y - 3;
       const ddx = (player.x + 1) - (POTION.x + 1);
       const ddy = (player.y + 1.5) - (py + 1.5);
-      if (Math.abs(ddx) < 2 && Math.abs(ddy) < 2.5) {
+      if (Math.abs(ddx) < 4 && Math.abs(ddy) < 5) {
         POTION.collected = true;
         if (player.hp < player.maxHp) player.hp += 1;
         // Sparkle + tone
@@ -1427,7 +1458,7 @@
       const fy = FLOORS[FRAGMENT.floorIdx].y - 3;
       const ddx = (player.x + 1) - (FRAGMENT.x + 1);
       const ddy = (player.y + 1.5) - (fy + 1.5);
-      if (Math.abs(ddx) < 2.5 && Math.abs(ddy) < 2.5) {
+      if (Math.abs(ddx) < 10 && Math.abs(ddy) < 5) {
         FRAGMENT.collected = true;
         collectedCodes[FRAGMENT.levelIdx] = FRAGMENT.digits;
         blip(523, 0.10, 'square', 0.06);
@@ -1442,7 +1473,7 @@
       const sy = FLOORS[SAFE.floorIdx].y - 6;
       const ddx = (player.x + 1) - (SAFE.x + 4);
       const ddy = (player.y + 1.5) - (sy + 2.5);
-      if (Math.abs(ddx) < 5 && Math.abs(ddy) < 4 && !SAFE.opened) {
+      if (Math.abs(ddx) < 10 && Math.abs(ddy) < 8 && !SAFE.opened) {
         codeInputMode = true;
         codeBuffer = '';
         codeMessage = 'ENTER 6-DIGIT CODE';
@@ -1489,14 +1520,21 @@
     // ── DEATH ───────────────────────────────────────────────────────
     if (player.hp <= 0 && !player.dead) {
       player.dead = true;
-      gameOverSound();
       spawnParticles(player.x + 1, player.y + 1.5, { count: 30, colors: ['#ff6464','#ff9a3a','#ffd56b'] });
-      setTimeout(() => {
-        gameState = 'gameover';
-        overlayText.textContent = 'YOU DIED';
-        overlaySub.textContent = 'Click to try again';
-        overlay.classList.remove('hidden');
-      }, 700);
+      if (player.lives > 0) {
+        // Continue — respawn on this same screen after a short pause.
+        player.lives -= 1;
+        blip(300, 0.18, 'sawtooth', 0.05, 140);
+        setTimeout(() => respawnPlayer(), 850);
+      } else {
+        gameOverSound();
+        setTimeout(() => {
+          gameState = 'gameover';
+          overlayText.textContent = 'GAME OVER';
+          overlaySub.textContent = 'Click to start a new game';
+          overlay.classList.remove('hidden');
+        }, 700);
+      }
     }
 
     // ── BLINK ───────────────────────────────────────────────────────
@@ -1555,8 +1593,8 @@
   // ───────────────────────────────────────────────────────────────────────
   //  SNOWMAN BOSS AI  (walks toward player, climbs ladders to follow)
   // ───────────────────────────────────────────────────────────────────────
-  const SNOWMAN_WALK = 7.0;        // cells/sec — slower than the player (12)
-  const SNOWMAN_CLIMB = 5.0;
+  const SNOWMAN_WALK = 14;        // cells/sec — slower than the player (12)
+  const SNOWMAN_CLIMB = 10;
 
   function findLadderNear(x, fromFloorIdx, wantTopY) {
     // Find a ladder at this floor whose other end is wantTopY.
@@ -1738,7 +1776,7 @@
     if (inHitFrame) {
       const hx = player.facing === 1 ? player.x + 3 : player.x - 3;
       const hy = player.y;
-      const hw = 3, hh = 3;
+      const hw = 6, hh = 6;
       for (const e of enemies) {
         if (e.hp <= 0 || e.hurt > 0) continue;
         if (rectOverlap(hx, hy, hw, hh, e.x, e.y, e.w, e.h)) {
@@ -1818,13 +1856,13 @@
 
     } else if (screen === 1) {
       // ── Dawn sky (river)
-      const grad = ctx.createLinearGradient(0, 0, 0, (RIVER ? RIVER.top : 26) * CHAR_H);
+      const grad = ctx.createLinearGradient(0, 0, 0, (RIVER ? RIVER.top : 52) * CHAR_H);
       grad.addColorStop(0,    '#1a2050');
       grad.addColorStop(0.45, '#7a5078');
       grad.addColorStop(0.8,  '#ffae6a');
       grad.addColorStop(1,    '#ffd87a');
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, canvas.width, (RIVER ? RIVER.top : 26) * CHAR_H);
+      ctx.fillRect(0, 0, canvas.width, (RIVER ? RIVER.top : 52) * CHAR_H);
 
       // Sun
       const sx = 78, sy = 8;
@@ -1953,7 +1991,7 @@
 
   function drawMountains() {
     // Parallax: as the player moves right, the mountains slide left a bit.
-    const shift = (player.x - 48) * 0.07;
+    const shift = (player.x - 96) * 0.07;
     const len = MOUNTAIN_TOP.length;
     for (let col = 0; col < COLS; col++) {
       const src = (((col + Math.round(shift)) % len) + len) % len;
@@ -1968,7 +2006,7 @@
   //  ORNAMENT WALLPAPER  (tiled parallax pattern inside each tier)
   // ───────────────────────────────────────────────────────────────────────
   function drawOrnamentLayer(pattern, yStart, yEnd, factor, color) {
-    const shift = (player.x - 48) * factor;
+    const shift = (player.x - 96) * factor;
     const ph = pattern.length;
     for (let y = yStart; y < yEnd; y++) {
       const row = pattern[((y - yStart) % ph + ph) % ph];
@@ -2009,7 +2047,7 @@
 
   function drawFarTrees() {
     // A second parallax layer that shifts more than the mountains.
-    const shift = (player.x - 48) * 0.18;
+    const shift = (player.x - 96) * 0.18;
     const len = FAR_TREES.length;
     // place silhouettes just above each platform for a multi-tier feel
     const rows = [5];
@@ -2206,10 +2244,17 @@
   }
 
   function drawHP() {
-    // Three hearts top-left of the canvas.
+    // Hearts (current HP).
     for (let i = 0; i < player.maxHp; i++) {
       const filled = i < player.hp;
       putChar(1 + i * 2, 0, filled ? '♥' : '♡', filled ? '#ff5070' : '#552040');
+    }
+    // Spare lives — small figure icons just after the hearts.
+    const baseCol = 2 + player.maxHp * 2;
+    putString(baseCol, 0, 'x', '#9aa6b8');
+    for (let i = 0; i < player.maxLives; i++) {
+      const filled = i < player.lives;
+      putChar(baseCol + 2 + i * 2, 0, filled ? '☺' : '·', filled ? '#7fc8ff' : '#3a4256');
     }
   }
 
@@ -2422,8 +2467,8 @@
   }
 
   function drawCodeHUD() {
-    // Show collected fragments next to the hearts.
-    const labelStart = 8;
+    // Show collected fragments to the right of hearts + lives.
+    const labelStart = 2 + player.maxHp * 2 + 2 + player.maxLives * 2 + 2;
     putString(labelStart, 0, 'CODE:', '#9aa6b8');
     for (let i = 0; i < 3; i++) {
       const txt = collectedCodes[i] || '··';
@@ -2617,7 +2662,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'b6';
+    const v = 'b8';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
