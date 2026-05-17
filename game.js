@@ -103,6 +103,66 @@
   ];
 
   // ───────────────────────────────────────────────────────────────────────
+  //  PARALLAX HORIZON  (mountains + distant tree silhouettes)
+  // ───────────────────────────────────────────────────────────────────────
+  // Two repeating horizon strips scrolled at different rates based on
+  // player.x — far things move less than near things.  Strips are longer
+  // than COLS so wrap-around is invisible at any shift.
+  const MOUNTAIN_TOP =
+    '   ▲            ▲▲              ▲▲▲              ▲              ▲▲              ▲▲▲▲              ▲▲           ▲▲▲           ▲        ▲▲             ▲           ▲▲▲       ';
+  const MOUNTAIN_BOT =
+    ' ▲▲▲▲▲        ▲▲▲▲▲▲▲▲        ▲▲▲▲▲▲▲▲▲         ▲▲▲▲▲▲        ▲▲▲▲▲▲▲▲         ▲▲▲▲▲▲▲▲▲▲▲       ▲▲▲▲         ▲▲▲▲▲▲▲        ▲▲▲▲▲     ▲▲▲▲▲▲▲        ▲▲▲▲▲       ▲▲▲▲▲▲▲▲  ';
+  const FAR_TREES =
+    '  ♠   ♣       ♠ ♠    ♣ ♠   ♣       ♠ ♠ ♣        ♠    ♠ ♠    ♣ ♠       ♠   ♣   ♠ ♠ ♣       ♠   ♣ ♠       ♠ ♣  ♠ ♠    ♠   ♣ ♠      ♠     ♣ ♠   ♠ ♣      ';
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  DRIFTING CLOUDS (independent animation)
+  // ───────────────────────────────────────────────────────────────────────
+  const CLOUD_SHAPES = [
+    ['  ╭▒▒▒╮  ',
+     ' ╰══════╯'],
+    [' ╭══╮ ',
+     '╰▒▒▒▒╯'],
+    [' ╭▒▒▒▒╮  ',
+     '╰══════╯ '],
+  ];
+  const CLOUDS = [];
+  for (let i = 0; i < 5; i++) {
+    CLOUDS.push({
+      x: Math.random() * COLS - 4,
+      y: 0 + ((Math.random() * 3) | 0),
+      speed: 0.6 + Math.random() * 1.4,
+      shape: (Math.random() * CLOUD_SHAPES.length) | 0,
+      colors: Math.random() < 0.5
+        ? ['#3a4360', '#262c40']
+        : ['#4a526e', '#2f3650'],
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  SHOOTING STARS, FIREFLIES, BATS
+  // ───────────────────────────────────────────────────────────────────────
+  const SHOOTING_STARS = [];
+  const BATS = [];
+
+  const FIREFLIES = [];
+  for (let i = 0; i < 16; i++) {
+    FIREFLIES.push({
+      cx: 4 + Math.random() * (COLS - 8),
+      cy: 8 + Math.random() * 20,
+      rx: 2 + Math.random() * 5,
+      ry: 1 + Math.random() * 2,
+      phase: Math.random() * Math.PI * 2,
+      pSpeed: 0.5 + Math.random() * 1.2,
+      blinkOff: Math.random() * Math.PI * 2,
+    });
+  }
+
+  // Tree sway phase
+  let windPhase = 0;
+
+
+  // ───────────────────────────────────────────────────────────────────────
   //  PLAYER
   // ───────────────────────────────────────────────────────────────────────
   // The player sprite is 3 rows tall, 3 cols wide.  `x` and `y` are the
@@ -282,6 +342,71 @@
   }
 
   // ───────────────────────────────────────────────────────────────────────
+  //  BACKGROUND ANIMATION UPDATES
+  // ───────────────────────────────────────────────────────────────────────
+  function updateClouds(dt) {
+    for (const c of CLOUDS) {
+      c.x += c.speed * dt;
+      const shapeW = CLOUD_SHAPES[c.shape][0].length;
+      if (c.x > COLS + 1) c.x = -shapeW - Math.random() * 10;
+    }
+  }
+  function updateShootingStars(dt) {
+    if (Math.random() < dt * 0.35) {
+      const fromLeft = Math.random() < 0.5;
+      SHOOTING_STARS.push({
+        x: fromLeft ? -2 : COLS + 2,
+        y: Math.random() * 4,
+        vx: fromLeft ? 55 + Math.random() * 25 : -(55 + Math.random() * 25),
+        vy: 12 + Math.random() * 18,
+        trail: [],
+        age: 0,
+        life: 0.7 + Math.random() * 0.3,
+      });
+    }
+    for (let i = SHOOTING_STARS.length - 1; i >= 0; i--) {
+      const s = SHOOTING_STARS[i];
+      s.age += dt;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.trail.push({ x: s.x, y: s.y });
+      if (s.trail.length > 10) s.trail.shift();
+      if (s.age >= s.life || s.y > 8 || s.x < -5 || s.x > COLS + 5) {
+        SHOOTING_STARS.splice(i, 1);
+      }
+    }
+  }
+  function updateFireflies(dt) {
+    for (const f of FIREFLIES) f.phase += dt * f.pSpeed;
+  }
+  function updateBats(dt) {
+    if (BATS.length < 2 && Math.random() < dt * 0.15) {
+      const goingRight = Math.random() < 0.5;
+      BATS.push({
+        x: goingRight ? -3 : COLS + 3,
+        y: 1 + Math.random() * 3,
+        vx: goingRight ? 9 + Math.random() * 4 : -(9 + Math.random() * 4),
+        yPhase: Math.random() * Math.PI * 2,
+        anim: 0,
+      });
+    }
+    for (let i = BATS.length - 1; i >= 0; i--) {
+      const b = BATS[i];
+      b.x += b.vx * dt;
+      b.yPhase += dt * 5;
+      b.anim += dt * 9;
+      if (b.x < -6 || b.x > COLS + 6) BATS.splice(i, 1);
+    }
+  }
+  function updateBackground(dt) {
+    windPhase += dt * 0.9;
+    updateClouds(dt);
+    updateShootingStars(dt);
+    updateFireflies(dt);
+    updateBats(dt);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
   //  AUDIO
   // ───────────────────────────────────────────────────────────────────────
   let audioCtx = null;
@@ -388,6 +513,8 @@
     player.ladderIdx = -1;
     KEY.collected = false;
     particles.length = 0;
+    SHOOTING_STARS.length = 0;
+    BATS.length = 0;
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -409,14 +536,13 @@
   //  UPDATE
   // ───────────────────────────────────────────────────────────────────────
   function update(dt) {
+    for (const s of STARS) s.phase += dt * s.speed;
+    updateBackground(dt);
+
     if (gameState !== 'playing') {
-      // background-only effects
-      for (const s of STARS) s.phase += dt * s.speed;
       updateParticles(dt);
       return;
     }
-
-    for (const s of STARS) s.phase += dt * s.speed;
 
     const left  = !!(keys['ArrowLeft']  || keys['a'] || keys['A']);
     const right = !!(keys['ArrowRight'] || keys['d'] || keys['D']);
@@ -598,6 +724,90 @@
     putSpriteColored(MOON.x, MOON.y, MOON_SPRITE, '#fff3c4');
   }
 
+  function drawMountains() {
+    // Parallax: as the player moves right, the mountains slide left a bit.
+    const shift = (player.x - 48) * 0.07;
+    const len = MOUNTAIN_TOP.length;
+    for (let col = 0; col < COLS; col++) {
+      const src = (((col + Math.round(shift)) % len) + len) % len;
+      const c1 = MOUNTAIN_TOP[src];
+      const c2 = MOUNTAIN_BOT[src];
+      if (c1 && c1 !== ' ') putChar(col, 4, c1, '#2c3656');
+      if (c2 && c2 !== ' ') putChar(col, 5, c2, '#1d2540');
+    }
+  }
+
+  function drawFarTrees() {
+    // A second parallax layer that shifts more than the mountains.
+    const shift = (player.x - 48) * 0.18;
+    const len = FAR_TREES.length;
+    // place silhouettes just above each platform for a multi-tier feel
+    const rows = [5];
+    for (const row of rows) {
+      for (let col = 0; col < COLS; col++) {
+        const src = (((col + Math.round(shift)) % len) + len) % len;
+        const ch = FAR_TREES[src];
+        if (ch && ch !== ' ') putChar(col, row, ch, '#1f3b2c');
+      }
+    }
+  }
+
+  function drawClouds() {
+    for (const c of CLOUDS) {
+      const shape = CLOUD_SHAPES[c.shape];
+      const px = Math.round(c.x);
+      for (let r = 0; r < shape.length; r++) {
+        const line = shape[r];
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === ' ') continue;
+          const col = px + i;
+          if (col < 0 || col >= COLS) continue;
+          const color = (ch === '═' || ch === '╯' || ch === '╰') ? c.colors[1] : c.colors[0];
+          putChar(col, c.y + r, ch, color);
+        }
+      }
+    }
+  }
+
+  function drawShootingStars() {
+    for (const s of SHOOTING_STARS) {
+      const a0 = 1 - s.age / s.life;
+      for (let i = 0; i < s.trail.length; i++) {
+        const t = s.trail[i];
+        const a = (i / s.trail.length) * a0;
+        if (a < 0.05) continue;
+        const cx = Math.floor(t.x), cy = Math.floor(t.y);
+        if (cx < 0 || cx >= COLS || cy < 0 || cy >= ROWS) continue;
+        const head = i === s.trail.length - 1;
+        const ch = head ? '✦' : (i > s.trail.length - 4 ? '*' : '·');
+        putChar(cx, cy, ch, `rgba(255,245,210,${a.toFixed(2)})`);
+      }
+    }
+  }
+
+  function drawBats() {
+    for (const b of BATS) {
+      const y = b.y + Math.sin(b.yPhase) * 0.7;
+      const wing = (b.anim | 0) % 2;
+      const ch = wing === 0 ? '"v"' : '\\v/';
+      const px = Math.floor(b.x);
+      const py = Math.floor(y);
+      putString(px, py, ch, '#3a2e3c');
+    }
+  }
+
+  function drawFireflies(time) {
+    for (const f of FIREFLIES) {
+      const x = f.cx + Math.cos(f.phase) * f.rx;
+      const y = f.cy + Math.sin(f.phase * 1.3 + 0.7) * f.ry;
+      const glow = 0.35 + 0.65 * Math.sin(time * 2.5 + f.blinkOff);
+      if (glow < 0.25) continue;
+      const a = glow.toFixed(2);
+      putChar(Math.floor(x), Math.floor(y), '·', `rgba(190,255,140,${a})`);
+    }
+  }
+
   function drawFloors() {
     for (let i = 0; i < FLOOR_Y.length; i++) {
       const y = FLOOR_Y[i];
@@ -636,10 +846,14 @@
 
   function drawTree(t) {
     const y = FLOOR_Y[t.floorIdx] - 6;
-    if (t.kind === 'pine') {
-      putSpriteColored(t.x - 3, y, TREE_PINE, TREE_PINE_COLORS);
-    } else {
-      putSpriteColored(t.x - 3, y, TREE_ROUND, TREE_ROUND_COLORS);
+    const sprite = t.kind === 'pine' ? TREE_PINE : TREE_ROUND;
+    const colors = t.kind === 'pine' ? TREE_PINE_COLORS : TREE_ROUND_COLORS;
+    // Top of the tree sways with the wind; trunk stays put.
+    const sway = Math.sin(windPhase + t.x * 0.35) * 0.6;
+    for (let r = 0; r < sprite.length; r++) {
+      const isCanopy = r < 4;
+      const dx = isCanopy ? Math.round(sway * (1 - r * 0.25)) : 0;
+      putString(t.x - 3 + dx, y + r, sprite[r], colors[r]);
     }
   }
   function drawBush(b) {
@@ -717,12 +931,21 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawSky(time);
 
-    // far decorations (behind player) — back to front
+    // Background parallax + sky animations (back to front)
+    drawMountains();
+    drawFarTrees();
+    drawClouds();
+    drawBats();
+    drawShootingStars();
+
+    // Foreground world
     for (const t of TREES) drawTree(t);
     drawFloors();
     drawLadders();
     for (const b of BUSHES) drawBush(b);
     for (const r of ROCKS) drawRock(r);
+
+    drawFireflies(time);
 
     drawChest();
     drawKey(time);
