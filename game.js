@@ -1110,7 +1110,11 @@
   // ───────────────────────────────────────────────────────────────────────
   function updateEnemies(dt) {
     for (const e of enemies) {
-      if (e.dead > 0) { e.dead -= dt; continue; }
+      if (e.hp <= 0) {
+        // Dying — count down the fade-out, no AI.
+        if (e.dead > 0) e.dead -= dt;
+        continue;
+      }
       if (e.hurt > 0) e.hurt -= dt;
       if (e.type === 'slime') {
         // Track the platform's current y (it may oscillate).
@@ -1136,7 +1140,8 @@
     }
     // Cull dead enemies whose fade-out finished.
     for (let i = enemies.length - 1; i >= 0; i--) {
-      if (enemies[i].dead < -0.5) enemies.splice(i, 1);
+      const e = enemies[i];
+      if (e.hp <= 0 && e.dead <= 0) enemies.splice(i, 1);
     }
   }
 
@@ -1152,7 +1157,7 @@
       const hy = player.y;
       const hw = 3, hh = 3;
       for (const e of enemies) {
-        if (e.dead > 0 || e.hurt > 0) continue;
+        if (e.hp <= 0 || e.hurt > 0) continue;
         if (rectOverlap(hx, hy, hw, hh, e.x, e.y, e.w, e.h)) {
           e.hp -= 1;
           e.hurt = 0.25;
@@ -1174,7 +1179,7 @@
     if (player.invul <= 0 && !player.dead) {
       const px = player.x, py = player.y;
       for (const e of enemies) {
-        if (e.dead > 0) continue;
+        if (e.hp <= 0) continue;
         if (rectOverlap(px, py, 3, 3, e.x, e.y, e.w, e.h)) {
           player.hp -= 1;
           player.invul = PLAYER_INVUL;
@@ -1464,13 +1469,15 @@
       sprite = a ? GHOST_A : GHOST_B;
       colors = GHOST_COLORS;
     }
-    // Dead enemies fade and shake
-    if (e.dead > 0) {
-      const a = (e.dead / 0.45).toFixed(2);
-      const sh = (Math.random() - 0.5) * 1.2;
-      ctx.globalAlpha = parseFloat(a);
-      for (let r = 0; r < sprite.length; r++) putString(px + Math.round(sh), py + r, sprite[r], colors[r] || colors[colors.length - 1]);
-      ctx.globalAlpha = 1;
+    // Dead enemies fade and shake (until culled)
+    if (e.hp <= 0) {
+      if (e.dead > 0) {
+        const a = (e.dead / 0.45).toFixed(2);
+        const sh = (Math.random() - 0.5) * 1.2;
+        ctx.globalAlpha = parseFloat(a);
+        for (let r = 0; r < sprite.length; r++) putString(px + Math.round(sh), py + r, sprite[r], colors[r] || colors[colors.length - 1]);
+        ctx.globalAlpha = 1;
+      }
       return;
     }
     // Hurt flash → tint white
