@@ -58,6 +58,10 @@
   let POTION = null;    // { x, floorIdx, collected } — heals +1 HP
   let FRAGMENT = null;  // { x, floorIdx, digits: "47", collected, levelIdx }
   let SAFE = null;      // { x, floorIdx, opened }
+  let BOMB_BUTTONS = []; // forest level: pressure plates the player can arm
+  let SPAWN_BUTTONS = []; // cave level: buttons that spawn 3-HP guardians
+  let ROPE = null;       // river level: high horizontal rope across the gap
+  const DROPS = [];      // health-potion drops from killed guardians (any screen)
   let BOAT = null;      // screen 1: { x, y, w, baseY, phase, onBoard }
   let RIVER = null;     // screen 1: { left, right, top }
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
@@ -100,6 +104,9 @@
     BOAT = null;
     RIVER = null;
     MOV_PLATS = [];
+    BOMB_BUTTONS = [];
+    SPAWN_BUTTONS = [];
+    ROPE = null;
     KEY = null;
     CHEST = null;
     POTION = null;
@@ -117,44 +124,57 @@
     codeBuffer = '';
 
     if (n === 0) {
-      // ───── Screen 0: Forest at night
+      // ───── Screen 0: Forest at night (4 tiers now)
       setFloors([
-        { y: 12,  left: 2, right: 196, theme: 'wood-light' },
-        { y: 36, left: 2, right: 196, theme: 'wood-mid' },
-        { y: 60, left: 2, right: 196, theme: 'wood-dark' },
+        { y: 10,  left: 2, right: 196, theme: 'wood-light' },  // 0 top
+        { y: 28,  left: 2, right: 196, theme: 'wood-mid'   },  // 1
+        { y: 46,  left: 2, right: 196, theme: 'wood-mid'   },  // 2
+        { y: 62,  left: 2, right: 196, theme: 'wood-dark'  },  // 3 bottom
       ]);
       LADDERS = [
-        { x: 44, top: 12,  bottom: 36 },
-        { x: 140, top: 12,  bottom: 36 },
-        { x: 76, top: 36, bottom: 60 },
-        { x: 168, top: 36, bottom: 60 },
+        { x: 44,  top: 10, bottom: 28 },
+        { x: 140, top: 10, bottom: 28 },
+        { x: 28,  top: 28, bottom: 46 },
+        { x: 110, top: 28, bottom: 46 },
+        { x: 170, top: 28, bottom: 46 },
+        { x: 56,  top: 46, bottom: 62 },
+        { x: 132, top: 46, bottom: 62 },
+        { x: 184, top: 46, bottom: 62 },
+      ];
+      // Bomb-trap buttons (press E nearby to arm).
+      BOMB_BUTTONS = [
+        { x: 90,  floorIdx: 3, used: false, armed: 0, fuse: 1.6, blastR: 8 },
+        { x: 150, floorIdx: 2, used: false, armed: 0, fuse: 1.6, blastR: 8 },
+        { x: 70,  floorIdx: 1, used: false, armed: 0, fuse: 1.6, blastR: 8 },
       ];
       TREES = [
-        { x: 16,  floorIdx: 2, kind: 'pine' },
-        { x: 100, floorIdx: 2, kind: 'round' },
-        { x: 184, floorIdx: 2, kind: 'pine' },
-        { x: 30, floorIdx: 1, kind: 'round' },
-        { x: 112, floorIdx: 1, kind: 'pine' },
+        { x: 16,  floorIdx: 3, kind: 'pine' },
+        { x: 100, floorIdx: 3, kind: 'round' },
+        { x: 184, floorIdx: 3, kind: 'pine' },
+        { x: 36,  floorIdx: 2, kind: 'round' },
+        { x: 120, floorIdx: 2, kind: 'pine' },
+        { x: 30,  floorIdx: 1, kind: 'pine' },
+        { x: 112, floorIdx: 1, kind: 'round' },
         { x: 180, floorIdx: 1, kind: 'round' },
-        { x: 20, floorIdx: 0, kind: 'pine' },
+        { x: 20,  floorIdx: 0, kind: 'pine' },
         { x: 160, floorIdx: 0, kind: 'round' },
       ];
       BUSHES = [
-        { x: 36, floorIdx: 2 }, { x: 60, floorIdx: 2 },
-        { x: 120, floorIdx: 2 }, { x: 152, floorIdx: 2 },
-        { x: 52, floorIdx: 1 }, { x: 90, floorIdx: 1 },
-        { x: 152, floorIdx: 1 }, { x: 8,  floorIdx: 1 },
+        { x: 36, floorIdx: 3 }, { x: 60, floorIdx: 3 },
+        { x: 120, floorIdx: 3 }, { x: 152, floorIdx: 3 },
+        { x: 14, floorIdx: 2 }, { x: 84, floorIdx: 2 }, { x: 170, floorIdx: 2 },
+        { x: 52, floorIdx: 1 }, { x: 152, floorIdx: 1 }, { x: 8,  floorIdx: 1 },
         { x: 40, floorIdx: 0 }, { x: 140, floorIdx: 0 },
       ];
       ROCKS = [
-        { x: 84, floorIdx: 2 }, { x: 176, floorIdx: 2 },
-        { x: 128, floorIdx: 1 }, { x: 60, floorIdx: 0 },
+        { x: 84, floorIdx: 3 }, { x: 176, floorIdx: 3 },
+        { x: 96, floorIdx: 2 }, { x: 60, floorIdx: 0 },
       ];
       CHEST = { x: 88, floorIdx: 0 };
       KEY   = { x: 104, floorIdx: 0, collected: false };
       // Optional code fragment (digits "47") + healing potion
-      FRAGMENT = { x: 72, floorIdx: 1, digits: FRAGMENT_DIGITS[0], levelIdx: 0, collected: !!collectedCodes[0] };
-      POTION   = { x: 128, floorIdx: 2, collected: false };
+      FRAGMENT = { x: 72, floorIdx: 2, digits: FRAGMENT_DIGITS[0], levelIdx: 0, collected: !!collectedCodes[0] };
+      POTION   = { x: 128, floorIdx: 3, collected: false };
       GOAL  = 'pickup-key';
 
     } else if (n === 1) {
@@ -176,8 +196,16 @@
       };
       // Add boat as a moving platform (last entry in FLOORS).
       FLOORS.push({ y: BOAT.y, left: BOAT.x, right: BOAT.x + BOAT.w - 1, isBoat: true });
+      // Alternate path: a high rope strung across the river.  Two short
+      // climbing posts on the banks lead up to a thin platform at row 22.
+      const ROPE_Y = 22;
+      FLOORS.push({ y: ROPE_Y, left: 36, right: 164, theme: 'rope' });   // floor idx after boat
+      LADDERS = [
+        { x: 36,  top: ROPE_Y, bottom: 52 },   // left bank → rope
+        { x: 164, top: ROPE_Y, bottom: 52 },   // right bank → rope
+      ];
+      ROPE = { y: ROPE_Y, left: 36, right: 164 };
       FLOOR_Y = FLOORS.map(f => f.y);
-      // No ladders; decorations.
       TREES = [
         { x: 16,  floorIdx: 0, kind: 'round' },
         { x: 36, floorIdx: 0, kind: 'pine' },
@@ -198,13 +226,15 @@
     } else if (n === 2) {
       // ───── Screen 2: Flying platforms in the sky
       setFloors([
-        { y: 60, left: 2,  right: 28, theme: 'cloud' },   // start
-        { y: 52, left: 36, right: 52, theme: 'cloud', oscY: { phase: 0,        amp: 2.4, speed: 1.0 } },
-        { y: 44, left: 64, right: 80, theme: 'cloud' },
-        { y: 36, left: 92, right: 108, theme: 'cloud', oscY: { phase: Math.PI/2,amp: 2.8, speed: 0.8 } },
-        { y: 28, left: 120, right: 136, theme: 'cloud' },
-        { y: 20, left: 148, right: 164, theme: 'cloud', oscY: { phase: Math.PI,  amp: 2.4, speed: 1.2 } },
-        { y: 12,  left: 172, right: 196, theme: 'cloud' },   // goal
+        { y: 60, left: 2,   right: 28,  theme: 'cloud' },                                                            // 0 start
+        { y: 52, left: 36,  right: 52,  theme: 'cloud', oscY: { phase: 0,        amp: 2.4, speed: 1.0 } },           // 1 osc
+        { y: 50, left: 60,  right: 72,  theme: 'cloud', autojump: true },                                            // 2 spring
+        { y: 44, left: 80,  right: 96,  theme: 'cloud' },                                                            // 3
+        { y: 36, left: 104, right: 120, theme: 'cloud', oscY: { phase: Math.PI/2,amp: 2.8, speed: 0.8 } },           // 4
+        { y: 30, left: 128, right: 142, theme: 'cloud' },                                                            // 5
+        { y: 26, left: 150, right: 164, theme: 'cloud', autojump: true },                                            // 6 spring
+        { y: 18, left: 170, right: 184, theme: 'cloud', oscY: { phase: Math.PI,  amp: 2.0, speed: 1.2 } },           // 7
+        { y: 10, left: 186, right: 198, theme: 'cloud' },                                                            // 8 goal
       ]);
       // Stash baseY and originals for oscillation.
       for (const f of FLOORS) {
@@ -212,8 +242,9 @@
       }
       // No final key here any more — sky goal is now reach-right (advance
       // into the cave).  Fragment + potion live on the path.
-      FRAGMENT = { x: 72, floorIdx: 2, digits: FRAGMENT_DIGITS[2], levelIdx: 2, collected: !!collectedCodes[2] };
-      POTION   = { x: 124, floorIdx: 4, collected: false };
+      // Place fragment + potion on stable (non-bouncy) platforms.
+      FRAGMENT = { x: 88,  floorIdx: 3, digits: FRAGMENT_DIGITS[2], levelIdx: 2, collected: !!collectedCodes[2] };
+      POTION   = { x: 134, floorIdx: 5, collected: false };
       BUSHES = [];
       ROCKS  = [];
       TREES  = [];
@@ -221,18 +252,20 @@
       GOAL = 'reach-right';
 
     } else if (n === 3) {
-      // ───── Screen 3: Cave with the safe
+      // ───── Screen 3: Cave with the safe (5 platforms now)
       setFloors([
-        { y: 60, left: 2,  right: 196, theme: 'stone' },  // 0  main bottom
-        { y: 40, left: 44, right: 156, theme: 'stone' },  // 1  mid (safe here)
-        { y: 20, left: 2,  right: 64, theme: 'stone' },  // 2  upper-left
-        { y: 20, left: 132, right: 196, theme: 'stone' },  // 3  upper-right (key here)
+        { y: 60, left: 2,   right: 196, theme: 'stone' },  // 0 main bottom
+        { y: 48, left: 16,  right: 36,  theme: 'stone' },  // 1 small ledge near left
+        { y: 40, left: 44,  right: 156, theme: 'stone' },  // 2 mid (safe here)
+        { y: 20, left: 2,   right: 64,  theme: 'stone' },  // 3 upper-left
+        { y: 20, left: 132, right: 196, theme: 'stone' },  // 4 upper-right (key here)
       ]);
       LADDERS = [
-        { x: 60, top: 40, bottom: 60 },
-        { x: 140, top: 40, bottom: 60 },
-        { x: 52, top: 20, bottom: 40 },
-        { x: 144, top: 20, bottom: 40 },
+        { x: 24,  top: 48, bottom: 60 },  // bottom → ledge 1
+        { x: 60,  top: 40, bottom: 60 },  // bottom → mid
+        { x: 140, top: 40, bottom: 60 },  // bottom → mid
+        { x: 52,  top: 20, bottom: 40 },  // mid → upper-left
+        { x: 144, top: 20, bottom: 40 },  // mid → upper-right
       ];
       // Decorations: stalactites along ceiling, stalagmites on bottom,
       // crystals embedded in walls, torches for atmosphere.
@@ -242,7 +275,7 @@
       ];
       STALAGMITES = [
         { x: 16, floorIdx: 0 }, { x: 32, floorIdx: 0 }, { x: 156, floorIdx: 0 },
-        { x: 176, floorIdx: 0 }, { x: 80, floorIdx: 1 }, { x: 120, floorIdx: 1 },
+        { x: 176, floorIdx: 0 }, { x: 80, floorIdx: 2 }, { x: 120, floorIdx: 2 },
       ];
       CRYSTALS = [
         { x: 8,  y: 12,  color: 'teal'   },
@@ -254,12 +287,17 @@
       ];
       TORCHES = [
         { x: 36, floorIdx: 0 }, { x: 160, floorIdx: 0 },
-        { x: 60, floorIdx: 1 }, { x: 140, floorIdx: 1 },
+        { x: 60, floorIdx: 2 }, { x: 140, floorIdx: 2 },
       ];
-      CHEST = { x: 176, floorIdx: 3 };
-      KEY   = { x: 184, floorIdx: 3, collected: false };
+      CHEST = { x: 176, floorIdx: 4 };
+      KEY   = { x: 184, floorIdx: 4, collected: false };
       POTION = { x: 100, floorIdx: 0, collected: false };
-      SAFE = { x: 96, floorIdx: 1, opened: safeOpened };
+      SAFE = { x: 96, floorIdx: 2, opened: safeOpened };
+      // Two spawn buttons summon a 3-HP guardian which drops a potion on death.
+      SPAWN_BUTTONS = [
+        { x: 60,  floorIdx: 0, used: false, side: -1 },   // spawns near left
+        { x: 140, floorIdx: 0, used: false, side:  1 },   // spawns near right
+      ];
       // Cave's key now opens the way to the snow boss arena.
       GOAL = 'pickup-key';
 
@@ -355,6 +393,59 @@
     }, 250);
   }
 
+  function detonateBomb(b) {
+    const by = FLOORS[b.floorIdx].y - 1;
+    const bx = b.x;
+    spawnParticles(bx, by, {
+      count: 60,
+      colors: ['#ffd56b','#ff9a3a','#ff5070','#ffffff'],
+      chars: ['*','✦','✧','+','·','×'],
+    });
+    noiseBurst(0.18, 0.10);
+    blip(140, 0.30, 'sawtooth', 0.08, 60);
+    const r2 = b.blastR * b.blastR;
+    for (const e of enemies) {
+      if (e.hp <= 0) continue;
+      const ex = e.x + (e.w || 3) / 2;
+      const ey = e.y + (e.h || 3) / 2;
+      const dx = ex - bx, dy = ey - by;
+      if (dx * dx + dy * dy <= r2) {
+        e.hp -= 3;        // bombs are nasty
+        e.hurt = 0.25;
+        if (e.hp <= 0) { e.dead = 0.35; enemyDieSound(); }
+      }
+    }
+    // Bomb damages the player too if too close.
+    const dxp = (player.x + 1) - bx;
+    const dyp = (player.y + 1.5) - by;
+    if (dxp * dxp + dyp * dyp <= r2 && player.invul <= 0 && !player.dead) {
+      player.hp -= 1;
+      player.invul = PLAYER_INVUL;
+      player.hurtFlash = 0.25;
+      hurtSound();
+    }
+  }
+
+  function spawnGuardian(b) {
+    const f = FLOORS[b.floorIdx];
+    enemies.push({
+      type: 'skel',
+      x: b.x + b.side * 6,
+      y: f.y - 3,
+      vx: b.side * 12,
+      facing: b.side,
+      hp: 3, maxHp: 3,
+      hurt: 0, dead: 0,
+      w: 3, h: 3,
+      floorIdx: b.floorIdx,
+      minX: Math.max(f.left, b.x - 30),
+      maxX: Math.min(f.right, b.x + 30),
+      walk: 0,
+      originY: f.y - 3,
+      dropsPotion: true,   // flag so combat code knows to drop a heart
+    });
+  }
+
   function submitCode() {
     if (codeBuffer === SAFE_CODE) {
       safeOpened = true;
@@ -372,6 +463,24 @@
           chars: ['★','✦','✧','*','+','·'],
         });
       }
+      // Dog joins immediately, right at the safe (so the safe-cracking
+      // payoff is visible on this same screen).
+      if (!dog) {
+        const sf = SAFE ? FLOORS[SAFE.floorIdx] : FLOORS[player.floorIdx];
+        const baseY = sf ? sf.y - 2 : player.y;
+        dog = {
+          x: Math.max(2, player.x - 5),
+          y: baseY,
+          vx: 0, vy: 0,
+          facing: 1,
+          biteCool: 0.6,
+          biteFlash: 0,
+          mood: 'follow',
+          bobPhase: 0,
+          floorIdx: SAFE ? SAFE.floorIdx : player.floorIdx,
+          onLadder: false,
+        };
+      }
       setTimeout(() => { codeInputMode = false; }, 900);
     } else {
       codeMessage = 'WRONG CODE — TRY AGAIN';
@@ -385,20 +494,31 @@
   function spawnEnemiesForScreen(n) {
     if (n === 0) {
       enemies = [
-        { type: 'slime', x: 72, y: FLOORS[2].y - 2, vx: 9, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 2, minX: 48, maxX: 140, hop: 0, hurt: 0, dead: 0,
+        // Bottom floor (3)
+        { type: 'slime', x: 72, y: FLOORS[3].y - 2, vx: 9, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 3, minX: 30, maxX: 110, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[3].y - 2 },
+        { type: 'skel', x: 168, y: FLOORS[3].y - 3, vx: 10, facing: 1, hp: 2, maxHp: 2,
+          floorIdx: 3, minX: 140, maxX: 192, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[3].y - 3 },
+        // Mid lower floor (2)
+        { type: 'skel', x: 60, y: FLOORS[2].y - 3, vx: -12, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 2, minX: 30, maxX: 150, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[2].y - 3 },
+        { type: 'slime', x: 178, y: FLOORS[2].y - 2, vx: -8, facing: -1, hp: 1, maxHp: 1,
+          floorIdx: 2, minX: 160, maxX: 192, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[2].y - 2 },
+        // Mid upper floor (1)
+        { type: 'skel', x: 120, y: FLOORS[1].y - 3, vx: -10, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 1, minX: 70, maxX: 178, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[1].y - 3 },
+        // Top floor (0)
         { type: 'slime', x: 140, y: FLOORS[0].y - 2, vx: -8, facing: -1, hp: 1, maxHp: 1,
           floorIdx: 0, minX: 116, maxX: 180, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[0].y - 2 },
-        { type: 'skel', x: 112, y: FLOORS[1].y - 3, vx: -12, facing: -1, hp: 2, maxHp: 2,
-          floorIdx: 1, minX: 52, maxX: 160, walk: 0, hurt: 0, dead: 0,
-          w: 3, h: 3, originY: FLOORS[1].y - 3 },
-        { type: 'skel', x: 168, y: FLOORS[2].y - 3, vx: 10, facing: 1, hp: 2, maxHp: 2,
-          floorIdx: 2, minX: 148, maxX: 190, walk: 0, hurt: 0, dead: 0,
-          w: 3, h: 3, originY: FLOORS[2].y - 3 },
-        { type: 'ghost', cx: 100, cy: 26, rx: 28, ry: 8,
-          x: 98, y: 26, phase: 0, pSpeed: 0.9, hp: 1, maxHp: 1,
+        // Ghost roams the mid-tier
+        { type: 'ghost', cx: 100, cy: 36, rx: 30, ry: 8,
+          x: 98, y: 36, phase: 0, pSpeed: 0.9, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
     } else if (n === 1) {
@@ -417,28 +537,28 @@
     } else if (n === 2) {
       // Sky screen: a couple of ghosts patrolling between platforms
       enemies = [
-        { type: 'ghost', cx: 70, cy: 44, rx: 20, ry: 6,
-          x: 68, y: 44, phase: 0, pSpeed: 1.2, hp: 1, maxHp: 1,
+        { type: 'ghost', cx: 80, cy: 44, rx: 20, ry: 6,
+          x: 78, y: 44, phase: 0, pSpeed: 1.2, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
-        { type: 'ghost', cx: 130, cy: 28, rx: 16, ry: 4,
-          x: 128, y: 28, phase: Math.PI, pSpeed: 1.0, hp: 1, maxHp: 1,
+        { type: 'ghost', cx: 140, cy: 28, rx: 18, ry: 4,
+          x: 138, y: 28, phase: Math.PI, pSpeed: 1.0, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
-        { type: 'slime', x: 150, y: FLOORS[5].y - 2, vx: 5, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 5, minX: 148, maxX: 156, hop: 0, hurt: 0, dead: 0,
+        { type: 'slime', x: 132, y: FLOORS[5].y - 2, vx: 5, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 5, minX: 128, maxX: 138, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[5].y - 2 },
       ];
     } else if (n === 3) {
-      // Cave screen: two skeletons + ghost + slime
+      // Cave screen: skeletons + ghost + slime (floor indices for new layout)
       enemies = [
         { type: 'skel', x: 100, y: FLOORS[0].y - 3, vx: 10, facing: 1, hp: 2, maxHp: 2,
           floorIdx: 0, minX: 44, maxX: 156, walk: 0, hurt: 0, dead: 0,
           w: 3, h: 3, originY: FLOORS[0].y - 3 },
-        { type: 'skel', x: 76, y: FLOORS[1].y - 3, vx: -8, facing: -1, hp: 2, maxHp: 2,
-          floorIdx: 1, minX: 48, maxX: 120, walk: 0, hurt: 0, dead: 0,
-          w: 3, h: 3, originY: FLOORS[1].y - 3 },
-        { type: 'slime', x: 160, y: FLOORS[3].y - 2, vx: 7, facing: 1, hp: 1, maxHp: 1,
-          floorIdx: 3, minX: 136, maxX: 184, hop: 0, hurt: 0, dead: 0,
-          w: 5, h: 2, originY: FLOORS[3].y - 2 },
+        { type: 'skel', x: 76, y: FLOORS[2].y - 3, vx: -8, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 2, minX: 48, maxX: 120, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[2].y - 3 },
+        { type: 'slime', x: 160, y: FLOORS[4].y - 2, vx: 7, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 4, minX: 136, maxX: 184, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[4].y - 2 },
         { type: 'ghost', cx: 100, cy: 28, rx: 32, ry: 6,
           x: 98, y: 28, phase: 0, pSpeed: 1.0, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
@@ -1164,11 +1284,11 @@
   });
 
   function spawnPosFor(n) {
-    if (n === 0) return { x: 12,  y: FLOORS[2].y - 3, floorIdx: 2 };
+    if (n === 0) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
     if (n === 1) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 2) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
-    if (n === 3) return { x: 12,  y: FLOORS[0].y - 3, floorIdx: 0 };
-    return            { x: 12,  y: FLOORS[2].y - 3, floorIdx: 2 };
+    if (n === 3) return { x: 12, y: FLOORS[0].y - 3, floorIdx: 0 };
+    return            { x: 12, y: FLOORS[2].y - 3, floorIdx: 2 };
   }
 
   function respawnPlayer() {
@@ -1211,6 +1331,7 @@
     codeBuffer = '';
     dog = null;
     SNOWFLAKES.length = 0;
+    DROPS.length = 0;
     loadScreen(0);
   }
   loadScreen(0);
@@ -1302,20 +1423,30 @@
       }
       // Reached top or bottom of ladder -> snap to floor
       const footRow = player.y + 3;
+      function pickFloorAt(y) {
+        // Prefer the floor at row y whose horizontal range contains the
+        // player; falls back to the first match.
+        const pcx = player.x + 1;
+        let first = -1;
+        for (let i = 0; i < FLOORS.length; i++) {
+          if (FLOORS[i].y !== y) continue;
+          if (first < 0) first = i;
+          if (pcx >= FLOORS[i].left - 0.5 && pcx <= FLOORS[i].right + 0.5) return i;
+        }
+        return first;
+      }
       if (player.vy < 0 && footRow <= L.top) {
-        // arrived at top floor
         player.y = L.top - 3;
         player.onLadder = false;
         player.state = 'stand';
         player.vy = 0;
-        // determine which floor index
-        player.floorIdx = FLOOR_Y.indexOf(L.top);
+        player.floorIdx = pickFloorAt(L.top);
       } else if (player.vy > 0 && footRow >= L.bottom) {
         player.y = L.bottom - 3;
         player.onLadder = false;
         player.state = 'stand';
         player.vy = 0;
-        player.floorIdx = FLOOR_Y.indexOf(L.bottom);
+        player.floorIdx = pickFloorAt(L.bottom);
       }
     } else {
       // ── HORIZONTAL MOVEMENT ───────────────────────────────────────
@@ -1373,6 +1504,16 @@
           player.floorIdx = i;
           player.onBoat = !!f.isBoat;
           if (player.state === 'jump') { player.state = 'stand'; landSound(); }
+          // Autojump pad: bounce the player upward immediately on landing.
+          if (f.autojump) {
+            player.vy = PHYS.jumpV * 1.5;
+            player.state = 'jump';
+            // Springy sound
+            blip(420, 0.05, 'square', 0.05, 880);
+            spawnParticles(player.x + 1, fy - 0.5, {
+              count: 12, colors: ['#ffd56b','#ffffff','#7fc8ff'], chars: ['↑','*','·'],
+            });
+          }
           break;
         }
       }
@@ -1481,7 +1622,71 @@
         blip(440, 0.10, 'triangle', 0.05);
       }
     }
+    // ── BOMB BUTTONS (press E nearby to arm; explodes after fuse) ──
+    if (BOMB_BUTTONS.length) {
+      for (const b of BOMB_BUTTONS) {
+        if (b.used) continue;
+        if (interactQueued && !codeInputMode) {
+          const by = FLOORS[b.floorIdx].y - 1;
+          const ddx = (player.x + 1) - (b.x + 0.5);
+          const ddy = (player.y + 3) - by;
+          if (Math.abs(ddx) < 2.5 && Math.abs(ddy) < 1.5) {
+            b.armed = b.fuse;
+            b.used = true;
+            blip(700, 0.05, 'square', 0.05);
+            interactQueued = false;          // consumed
+            break;
+          }
+        }
+      }
+      // Tick down armed bombs and detonate when fuse hits zero.
+      for (const b of BOMB_BUTTONS) {
+        if (!b.used || b.armed <= 0) continue;
+        b.armed -= dt;
+        if (b.armed <= 0) detonateBomb(b);
+      }
+    }
+    // ── SPAWN BUTTONS (cave): summon a guardian (3 HP, drops potion) ─
+    if (SPAWN_BUTTONS.length && interactQueued && !codeInputMode) {
+      for (const b of SPAWN_BUTTONS) {
+        if (b.used) continue;
+        const by = FLOORS[b.floorIdx].y - 1;
+        const ddx = (player.x + 1) - (b.x + 0.5);
+        const ddy = (player.y + 3) - by;
+        if (Math.abs(ddx) < 2.5 && Math.abs(ddy) < 1.5) {
+          b.used = true;
+          spawnGuardian(b);
+          blip(330, 0.10, 'sawtooth', 0.05, 660);
+          interactQueued = false;
+          break;
+        }
+      }
+    }
     interactQueued = false;
+
+    // ── DROPPED POTIONS (from killed guardians) ─────────────────────
+    if (DROPS.length) {
+      for (let i = DROPS.length - 1; i >= 0; i--) {
+        const d = DROPS[i];
+        // Pull toward closest floor (gravity-style)
+        d.vy = Math.min(d.vy + 80 * dt, 30);
+        d.y += d.vy * dt;
+        for (const f of FLOORS) {
+          if (d.x + 1 >= f.left && d.x + 1 <= f.right + 1 && d.y >= f.y - 1) {
+            d.y = f.y - 1; d.vy = 0; break;
+          }
+        }
+        const ddx = (player.x + 1) - (d.x + 1);
+        const ddy = (player.y + 1.5) - (d.y + 0.5);
+        if (Math.abs(ddx) < 4 && Math.abs(ddy) < 5) {
+          if (player.hp < player.maxHp) player.hp += 1;
+          DROPS.splice(i, 1);
+          blip(660, 0.08, 'square', 0.06);
+          setTimeout(() => blip(880, 0.10, 'square', 0.06), 60);
+          spawnParticles(d.x + 1, d.y, { count: 14, colors: ['#ff5070','#ff9aa0','#ffffff'], chars: ['♥','*','+'] });
+        }
+      }
+    }
 
     if (codeMessageTimer > 0) codeMessageTimer -= dt;
     if (codeShake > 0) codeShake -= dt;
@@ -1713,36 +1918,58 @@
 
     // Find a snowman target (any alive snowman).
     const snowman = enemies.find(e => e.type === 'snowman' && e.hp > 0);
-
-    let tx, ty, mood;
-    if (snowman && Math.abs(snowman.y - player.y) < 8) {
-      // Chase the snowman aggressively when player + snowman are roughly
-      // on the same height range (so the dog stays helpful but doesn't
-      // teleport across whole map).
-      mood = 'chase';
-      tx = snowman.x - 1 * (snowman.x > dog.x ? -1 : 1);  // approach from same side
-      tx = snowman.x + (snowman.x > player.x ? -2 : snowman.w);  // close in
-      ty = snowman.y + 2;
-    } else {
-      mood = 'follow';
-      tx = player.x - 4 * player.facing;
-      ty = player.y + 1;
-    }
+    const wantTarget = snowman || player;
+    const mood = (snowman && Math.abs(snowman.y - player.y) < 16) ? 'chase' : 'follow';
     dog.mood = mood;
 
-    // Smooth follow (lerp).  Faster chase, slower follow.
-    const speed = mood === 'chase' ? 14 : 9;
-    const dxv = tx - dog.x;
-    const dyv = ty - dog.y;
-    const step = speed * dt;
-    if (Math.abs(dxv) < step) dog.x = tx;
-    else dog.x += Math.sign(dxv) * step;
-    if (Math.abs(dyv) < step) dog.y = ty;
-    else dog.y += Math.sign(dyv) * step;
-    dog.facing = (mood === 'chase')
-      ? (snowman ? Math.sign(snowman.x - dog.x) || dog.facing : dog.facing)
-      : (Math.sign(player.x - dog.x) || dog.facing);
-    if (dog.facing === 0) dog.facing = 1;
+    if (screen === 4) {
+      // On the snow boss arena the dog walks on platforms — no flying.
+      // It tracks the player's floor and uses a simple X-only chase.
+      dog.floorIdx = player.floorIdx;
+      const f = FLOORS[dog.floorIdx];
+      if (f) dog.y = f.y - 2;
+      let tx;
+      if (mood === 'chase' && snowman) {
+        // Approach from whichever side puts us between player and snowman.
+        tx = snowman.x + (snowman.x > player.x ? -2 : snowman.w);
+      } else {
+        tx = player.x - 5 * (player.facing || 1);
+      }
+      const speed = (mood === 'chase' ? 26 : 18);
+      const dxv = tx - dog.x;
+      const step = speed * dt;
+      if (Math.abs(dxv) < step) dog.x = tx;
+      else dog.x += Math.sign(dxv) * step;
+      // Clamp to current platform so the dog never walks off into the void.
+      if (f) dog.x = Math.max(f.left, Math.min(f.right - 4, dog.x));
+      dog.facing = (mood === 'chase')
+        ? (Math.sign(snowman.x - dog.x) || dog.facing)
+        : (Math.sign(player.x - dog.x) || dog.facing);
+      if (dog.facing === 0) dog.facing = 1;
+    } else {
+      // Anywhere else (e.g., still in the cave when the safe popped):
+      // the dog floats and lerps so it can keep up across odd terrain.
+      let tx, ty;
+      if (mood === 'chase' && snowman) {
+        tx = snowman.x + (snowman.x > player.x ? -2 : snowman.w);
+        ty = snowman.y + 2;
+      } else {
+        tx = player.x - 5 * (player.facing || 1);
+        ty = player.y + 1;
+      }
+      const speed = mood === 'chase' ? 24 : 16;
+      const dxv = tx - dog.x;
+      const dyv = ty - dog.y;
+      const step = speed * dt;
+      if (Math.abs(dxv) < step) dog.x = tx;
+      else dog.x += Math.sign(dxv) * step;
+      if (Math.abs(dyv) < step) dog.y = ty;
+      else dog.y += Math.sign(dyv) * step;
+      dog.facing = (mood === 'chase')
+        ? (snowman ? Math.sign(snowman.x - dog.x) || dog.facing : dog.facing)
+        : (Math.sign(player.x - dog.x) || dog.facing);
+      if (dog.facing === 0) dog.facing = 1;
+    }
 
     // Bite!  When close to snowman and cooldown is up.
     if (snowman && dog.biteCool <= 0) {
@@ -1794,6 +2021,9 @@
               count: 36, colors: deathColor,
               chars: ['*','·','✦','+','✧','×'],
             });
+            if (e.dropsPotion) {
+              DROPS.push({ x: e.x + e.w / 2 - 1, y: e.y, vy: 0 });
+            }
           }
         }
       }
@@ -2262,6 +2492,7 @@
     for (let i = 0; i < FLOORS.length; i++) {
       const f = FLOORS[i];
       if (f.isBoat) continue; // boat drawn separately
+      if (f.theme === 'rope') continue; // rope drawn separately
       const y = Math.round(f.y);
       const left = Math.round(f.left);
       const right = Math.round(f.right);
@@ -2403,6 +2634,62 @@
     putSpriteColored(FRAGMENT.x, drawY, sprite, FRAGMENT_COLORS);
     if ((((time * 5) | 0) % 3) === 0) {
       putChar(FRAGMENT.x + 1 + ((Math.random() * 3) | 0), drawY - 1, '✦', '#ffe888');
+    }
+  }
+
+  function drawBombs(time) {
+    for (const b of BOMB_BUTTONS) {
+      const f = FLOORS[b.floorIdx];
+      if (!f) continue;
+      const y = f.y - 1;
+      if (!b.used) {
+        // Idle button on the floor.
+        putString(b.x - 1, y, '[!]', '#ffd56b');
+      } else if (b.armed > 0) {
+        // Armed bomb — blink faster as the fuse runs down.
+        const rate = 6 + (1.6 - b.armed) * 30;
+        const lit = (((time * rate) | 0) % 2) === 0;
+        putString(b.x - 1, y, '[!]', lit ? '#ff5070' : '#552040');
+        // Bomb icon above
+        putChar(b.x, y - 1, lit ? '●' : '○', lit ? '#ff5070' : '#3a2030');
+      }
+    }
+  }
+  function drawSpawnButtons(time) {
+    for (const b of SPAWN_BUTTONS) {
+      const f = FLOORS[b.floorIdx];
+      if (!f) continue;
+      const y = f.y - 1;
+      const lit = !b.used && (((time * 3) | 0) % 2) === 0;
+      putString(b.x - 1, y, '[?]', b.used ? '#3a4256' : (lit ? '#c060e0' : '#7a48a0'));
+    }
+  }
+  function drawDrops(time) {
+    for (const d of DROPS) {
+      const y = Math.round(d.y);
+      const bob = ((time * 6) | 0) % 2 === 0 ? -1 : 0;
+      putChar(d.x + 1, y + bob, '♥', '#ff5070');
+    }
+  }
+  function drawRope(time) {
+    if (!ROPE) return;
+    for (let x = ROPE.left; x <= ROPE.right; x++) {
+      const slack = Math.round(Math.sin((x - ROPE.left) * 0.15 + time * 1.4) * 0.4);
+      putChar(x, ROPE.y + slack, x % 3 === 0 ? '═' : '─', '#caa070');
+    }
+    // Knots at the posts
+    putChar(ROPE.left, ROPE.y, '╕', '#7a4a22');
+    putChar(ROPE.right, ROPE.y, '╒', '#7a4a22');
+  }
+  function drawAutojumpHints(time) {
+    for (const f of FLOORS) {
+      if (!f.autojump) continue;
+      // Bouncing arrow above the platform centre.
+      const cx = (f.left + f.right) / 2 | 0;
+      const bob = Math.sin(time * 4) * 0.6;
+      putChar(cx,     f.y - 2 + Math.round(bob), '↑', '#ffd56b');
+      putChar(cx - 1, f.y - 1, '∧', '#ffd56b');
+      putChar(cx + 1, f.y - 1, '∧', '#ffd56b');
     }
   }
 
@@ -2611,18 +2898,23 @@
     for (const t of TREES) drawTree(t);
     drawFloors();
     drawLadders();
+    if (screen === 1) drawRope(time);
     for (const b of BUSHES) drawBush(b);
     for (const r of ROCKS) drawRock(r);
 
     if (screen === 1) drawBoat(time);
 
     if (screen === 0) drawFireflies(time);
+    if (screen === 2) drawAutojumpHints(time);
 
     drawChest();
     drawKey(time);
     drawPotion(time);
     drawFragment(time);
     drawSafe(time);
+    drawBombs(time);
+    drawSpawnButtons(time);
+    drawDrops(time);
 
     // Enemies behind player so player passes in front during overlap.
     for (const e of enemies) drawEnemy(e, time);
@@ -2662,7 +2954,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'b8';
+    const v = 'b9';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
