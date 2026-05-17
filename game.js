@@ -648,6 +648,16 @@
   // ───────────────────────────────────────────────────────────────────────
   const SHOOTING_STARS = [];
   const BATS = [];
+  // Birds — flocks of small flapping shapes that drift across every level.
+  const BIRDS = [];
+  const BIRD_PALETTE = {
+    0: '#2a3340',   // forest: dark silhouettes
+    1: '#ffffff',   // river: white seagulls
+    2: '#ffd56b',   // sky: yellow finches
+    3: '#4a4458',   // cave: faint shadows (rare)
+    4: '#1a1a22',   // snow: stark ravens
+  };
+  const BIRD_FRAMES = ['/V\\', '_v_'];
 
   const FIREFLIES = [];
   for (let i = 0; i < 16; i++) {
@@ -1105,12 +1115,39 @@
       if (b.x < -6 || b.x > COLS + 6) BATS.splice(i, 1);
     }
   }
+  function updateBirds(dt) {
+    // Cave is mostly bat territory and snow is sparse — fewer birds.
+    const cap = screen === 3 ? 0 : (screen === 4 ? 2 : 4);
+    const rate = (screen === 1 || screen === 2) ? 0.55 : 0.25;
+    if (BIRDS.length < cap && Math.random() < dt * rate) {
+      const goingRight = Math.random() < 0.5;
+      const altitude = (screen === 2) ? (4 + Math.random() * 12)
+                                       : (3 + Math.random() * 8);
+      BIRDS.push({
+        x: goingRight ? -4 : COLS + 4,
+        y: altitude,
+        vx: goingRight ? 22 + Math.random() * 16 : -(22 + Math.random() * 16),
+        yPhase: Math.random() * Math.PI * 2,
+        anim: 0,
+        size: Math.random() < 0.5 ? 1 : 2,   // small or normal
+      });
+    }
+    for (let i = BIRDS.length - 1; i >= 0; i--) {
+      const b = BIRDS[i];
+      b.x += b.vx * dt;
+      b.yPhase += dt * 4;
+      b.anim += dt * 11;
+      if (b.x < -6 || b.x > COLS + 6) BIRDS.splice(i, 1);
+    }
+  }
+
   function updateBackground(dt) {
     windPhase += dt * 0.9;
     updateClouds(dt);
     updateShootingStars(dt);
     updateFireflies(dt);
     updateBats(dt);
+    updateBirds(dt);
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -1332,6 +1369,7 @@
     dog = null;
     SNOWFLAKES.length = 0;
     DROPS.length = 0;
+    BIRDS.length = 0;
     loadScreen(0);
   }
   loadScreen(0);
@@ -1627,10 +1665,11 @@
       for (const b of BOMB_BUTTONS) {
         if (b.used) continue;
         if (interactQueued && !codeInputMode) {
-          const by = FLOORS[b.floorIdx].y - 1;
-          const ddx = (player.x + 1) - (b.x + 0.5);
-          const ddy = (player.y + 3) - by;
-          if (Math.abs(ddx) < 2.5 && Math.abs(ddy) < 1.5) {
+          // Button visual centre is at b.x; allow a generous activation
+          // box so the player just has to be standing on / near it.
+          const ddx = (player.x + 1) - b.x;
+          const sameFloor = player.floorIdx === b.floorIdx;
+          if (sameFloor && Math.abs(ddx) < 5) {
             b.armed = b.fuse;
             b.used = true;
             blip(700, 0.05, 'square', 0.05);
@@ -1650,10 +1689,9 @@
     if (SPAWN_BUTTONS.length && interactQueued && !codeInputMode) {
       for (const b of SPAWN_BUTTONS) {
         if (b.used) continue;
-        const by = FLOORS[b.floorIdx].y - 1;
-        const ddx = (player.x + 1) - (b.x + 0.5);
-        const ddy = (player.y + 3) - by;
-        if (Math.abs(ddx) < 2.5 && Math.abs(ddy) < 1.5) {
+        const ddx = (player.x + 1) - b.x;
+        const sameFloor = player.floorIdx === b.floorIdx;
+        if (sameFloor && Math.abs(ddx) < 5) {
           b.used = true;
           spawnGuardian(b);
           blip(330, 0.10, 'sawtooth', 0.05, 660);
@@ -2219,16 +2257,25 @@
     }
   }
 
-  function drawMountains() {
+  function drawMountains(rowTop, rowBot, factor, topCol, botCol) {
     // Parallax: as the player moves right, the mountains slide left a bit.
-    const shift = (player.x - 96) * 0.07;
+    const shift = (player.x - 96) * factor;
     const len = MOUNTAIN_TOP.length;
     for (let col = 0; col < COLS; col++) {
       const src = (((col + Math.round(shift)) % len) + len) % len;
       const c1 = MOUNTAIN_TOP[src];
       const c2 = MOUNTAIN_BOT[src];
-      if (c1 && c1 !== ' ') putChar(col, 4, c1, '#2c3656');
-      if (c2 && c2 !== ' ') putChar(col, 5, c2, '#1d2540');
+      if (c1 && c1 !== ' ') putChar(col, rowTop, c1, topCol);
+      if (c2 && c2 !== ' ') putChar(col, rowBot, c2, botCol);
+    }
+  }
+  function drawFarTreesAt(row, factor, color) {
+    const shift = (player.x - 96) * factor;
+    const len = FAR_TREES.length;
+    for (let col = 0; col < COLS; col++) {
+      const src = (((col + Math.round(shift)) % len) + len) % len;
+      const ch = FAR_TREES[src];
+      if (ch && ch !== ' ') putChar(col, row, ch, color);
     }
   }
 
@@ -2250,18 +2297,23 @@
   }
   function drawTierOrnaments(time) {
     if (screen === 0) {
-      // Tier 1: rows 7..17 (between top and middle floors)
-      drawOrnamentLayer(ORN_FAR,  7, 17, 0.03, '#171a2e');
-      drawOrnamentLayer(ORN_MID,  7, 17, 0.10, '#1d2742');
-      drawOrnamentLayer(ORN_VINE, 7, 17, 0.16, '#22324a');
-      drawOrnamentLayer(ORN_NEAR, 7, 17, 0.22, '#2a2240');
-      // Tier 2: rows 19..29 (between middle and bottom floors)
-      drawOrnamentLayer(ORN_FAR,  19, 29, 0.03, '#161a26');
-      drawOrnamentLayer(ORN_MID,  19, 29, 0.10, '#1c2438');
-      drawOrnamentLayer(ORN_VINE, 19, 29, 0.16, '#1f2a3a');
-      drawOrnamentLayer(ORN_NEAR, 19, 29, 0.22, '#26203a');
-      // Bottom strip
-      drawOrnamentLayer(ORN_MID,  31, 33, 0.10, '#1a1722');
+      // Forest now has 4 tiers; ornament wallpaper between each pair.
+      const fy = FLOORS.map(f => f.y);
+      for (let i = 0; i < fy.length - 1; i++) {
+        const yStart = fy[i] + 2;
+        const yEnd   = fy[i + 1] - 1;
+        if (yEnd <= yStart) continue;
+        drawOrnamentLayer(ORN_FAR,  yStart, yEnd, 0.03, '#171a2e');
+        drawOrnamentLayer(ORN_MID,  yStart, yEnd, 0.10, '#1d2742');
+        drawOrnamentLayer(ORN_VINE, yStart, yEnd, 0.16, '#22324a');
+        drawOrnamentLayer(ORN_NEAR, yStart, yEnd, 0.22, '#2a2240');
+      }
+      drawOrnamentLayer(ORN_MID,  fy[fy.length - 1] + 2, ROWS - 1, 0.10, '#1a1722');
+    } else if (screen === 1) {
+      // River: faint ornament strip under the water for depth.
+      const riverTop = (RIVER ? RIVER.top : 52) + 2;
+      drawOrnamentLayer(ORN_FAR,  riverTop, ROWS - 1, 0.04, 'rgba(180,210,255,0.10)');
+      drawOrnamentLayer(ORN_VINE, riverTop, ROWS - 1, 0.10, 'rgba(140,180,220,0.08)');
     } else if (screen === 2) {
       // Cloud-and-airy ornaments behind the flying platforms
       drawOrnamentLayer(ORN_FAR,  0, ROWS - 1, 0.04, 'rgba(255,255,255,0.35)');
@@ -2272,21 +2324,37 @@
       drawOrnamentLayer(ORN_FAR,  0, ROWS - 1, 0.04, 'rgba(80,90,120,0.20)');
       drawOrnamentLayer(ORN_MID,  0, ROWS - 1, 0.10, 'rgba(110,120,150,0.10)');
       drawOrnamentLayer(ORN_VINE, 0, ROWS - 1, 0.16, 'rgba(160,100,200,0.10)');
+    } else if (screen === 4) {
+      // Snow: crystalline parallax pattern between floors.
+      const fy = FLOORS.map(f => f.y);
+      for (let i = 0; i < fy.length - 1; i++) {
+        const yStart = fy[i] + 2;
+        const yEnd   = fy[i + 1] - 1;
+        if (yEnd <= yStart) continue;
+        drawOrnamentLayer(ORN_FAR,  yStart, yEnd, 0.03, 'rgba(180,200,230,0.18)');
+        drawOrnamentLayer(ORN_MID,  yStart, yEnd, 0.10, 'rgba(150,180,210,0.12)');
+        drawOrnamentLayer(ORN_VINE, yStart, yEnd, 0.16, 'rgba(120,160,200,0.08)');
+      }
     }
   }
 
-  function drawFarTrees() {
-    // A second parallax layer that shifts more than the mountains.
-    const shift = (player.x - 96) * 0.18;
-    const len = FAR_TREES.length;
-    // place silhouettes just above each platform for a multi-tier feel
-    const rows = [5];
-    for (const row of rows) {
-      for (let col = 0; col < COLS; col++) {
-        const src = (((col + Math.round(shift)) % len) + len) % len;
-        const ch = FAR_TREES[src];
-        if (ch && ch !== ' ') putChar(col, row, ch, '#1f3b2c');
-      }
+  function drawScreenParallax(time) {
+    // Per-screen back-to-front parallax layers — runs on every level.
+    if (screen === 0) {
+      drawMountains(8, 10, 0.07, '#2c3656', '#1d2540');
+      drawFarTreesAt(11, 0.18, '#1f3b2c');
+    } else if (screen === 1) {
+      drawMountains(14, 16, 0.05, '#8b4f6a', '#5a2840');
+      drawFarTreesAt(20, 0.14, '#2c1a30');
+    } else if (screen === 2) {
+      drawFarTreesAt(20, 0.05, 'rgba(255,255,255,0.18)');
+      drawFarTreesAt(34, 0.12, 'rgba(255,255,255,0.12)');
+    } else if (screen === 3) {
+      drawMountains(2, 4, 0.04, '#2a2238', '#1a1422');
+      drawFarTreesAt(58, 0.10, '#1a1018');
+    } else if (screen === 4) {
+      drawMountains(6, 8, 0.06, '#6a7a9a', '#4a5878');
+      drawFarTreesAt(11, 0.15, '#3a4458');
     }
   }
 
@@ -2378,6 +2446,28 @@
       const px = Math.floor(b.x);
       const py = Math.floor(y);
       putString(px, py, ch, '#3a2e3c');
+    }
+  }
+
+  function drawBirds(time) {
+    const col = BIRD_PALETTE[screen] || '#444';
+    for (const b of BIRDS) {
+      const y = b.y + Math.sin(b.yPhase) * 0.6;
+      const wing = (b.anim | 0) % 2;
+      const px = Math.floor(b.x);
+      const py = Math.floor(y);
+      // Facing depends on direction of travel.
+      let frame = BIRD_FRAMES[wing];
+      if (b.vx < 0) {
+        // Mirror so the bird "looks" the right way (visually symmetric anyway).
+        frame = wing === 0 ? '\\V/' : '_v_';
+      }
+      if (b.size === 1) {
+        // Small bird — just one char.
+        putChar(px, py, wing === 0 ? 'v' : '^', col);
+      } else {
+        putString(px, py, frame, col);
+      }
     }
   }
 
@@ -2643,14 +2733,18 @@
       if (!f) continue;
       const y = f.y - 1;
       if (!b.used) {
-        // Idle button on the floor.
-        putString(b.x - 1, y, '[!]', '#ffd56b');
+        const near = player.floorIdx === b.floorIdx && Math.abs((player.x + 1) - b.x) < 5;
+        const pulse = (((time * 3) | 0) % 2) === 0;
+        putString(b.x - 1, y, '[!]', pulse ? '#ffd56b' : '#caa040');
+        if (near) {
+          const hint = 'E:BOMB';
+          putString(Math.round(b.x - hint.length / 2), y - 2, hint, '#ffd56b');
+        }
       } else if (b.armed > 0) {
         // Armed bomb — blink faster as the fuse runs down.
         const rate = 6 + (1.6 - b.armed) * 30;
         const lit = (((time * rate) | 0) % 2) === 0;
         putString(b.x - 1, y, '[!]', lit ? '#ff5070' : '#552040');
-        // Bomb icon above
         putChar(b.x, y - 1, lit ? '●' : '○', lit ? '#ff5070' : '#3a2030');
       }
     }
@@ -2662,6 +2756,13 @@
       const y = f.y - 1;
       const lit = !b.used && (((time * 3) | 0) % 2) === 0;
       putString(b.x - 1, y, '[?]', b.used ? '#3a4256' : (lit ? '#c060e0' : '#7a48a0'));
+      if (!b.used) {
+        const near = player.floorIdx === b.floorIdx && Math.abs((player.x + 1) - b.x) < 5;
+        if (near) {
+          const hint = 'E:SUMMON';
+          putString(Math.round(b.x - hint.length / 2), y - 2, hint, '#c060e0');
+        }
+      }
     }
   }
   function drawDrops(time) {
@@ -2876,13 +2977,12 @@
     // Tier wallpaper (screen 0 + 2 only)
     drawTierOrnaments(time);
 
-    // Background parallax + sky animations (back to front).  Some only
-    // make sense on the night-forest screen.
-    if (screen === 0) {
-      drawMountains();
-      drawFarTrees();
-    }
+    // Per-screen parallax horizon (mountains + far trees), runs on
+    // every level with screen-specific palette/positions.
+    drawScreenParallax(time);
+
     drawClouds();
+    drawBirds(time);
     if (screen === 0) {
       drawBats();
       drawShootingStars();
@@ -2954,7 +3054,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'b9';
+    const v = 'c0';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
