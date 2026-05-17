@@ -5,8 +5,11 @@
   // ───────────────────────────────────────────────────────────────────────
   //  CANVAS / GRID
   // ───────────────────────────────────────────────────────────────────────
-  const CHAR_W = 5;
-  const CHAR_H = 9;
+  // Cell pixel size at 1.5× the original (5×9 → 7.5×13.5).  Grid stays
+  // 200×68 cells, so canvas grows to 1500×918 — easier to see without
+  // changing any gameplay coordinates.
+  const CHAR_W = 7.5;
+  const CHAR_H = 13.5;
   const COLS = 200;
   const ROWS = 68;
 
@@ -15,7 +18,7 @@
   canvas.width = COLS * CHAR_W;
   canvas.height = ROWS * CHAR_H;
 
-  const FONT = '8px "Cascadia Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "Consolas", "Menlo", monospace';
+  const FONT = '12px "Cascadia Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "Consolas", "Menlo", monospace';
   ctx.font = FONT;
   ctx.textBaseline = 'top';
   ctx.textAlign = 'center';
@@ -3228,7 +3231,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c1';
+    const v = 'c2';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 

@@ -45,8 +45,8 @@ html, body {
   padding: 1px 5px;
   font-size: 11px;
 }
-#sndBtn { cursor: pointer; }
-#sndBtn:hover { color: #ffd56b; border-color: #5a4a14; }
+#sndBtn, #musBtn { cursor: pointer; }
+#sndBtn:hover, #musBtn:hover { color: #ffd56b; border-color: #5a4a14; }
 
 #game {
   display: block;
