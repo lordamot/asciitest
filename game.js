@@ -181,7 +181,17 @@
     climbPhase: 0,
     stepTimer: 0,
     blinkTimer: 0,
+    hp: 3,
+    maxHp: 3,
+    invul: 0,         // seconds of invulnerability after a hit
+    attack: 0,        // seconds remaining in attack swing
+    attackCool: 0,    // brief cooldown so X doesn't auto-spam
+    hurtFlash: 0,
+    dead: false,
   };
+  const ATTACK_DUR = 0.30;
+  const ATTACK_COOL = 0.12;
+  const PLAYER_INVUL = 1.0;
 
   const PHYS = {
     walkSpeed: 12,        // cells per second
@@ -253,6 +263,137 @@
 
   const COLOR_PLAYER = ['#ffd9a8', '#6fb6ff', '#2d4a78']; // head / shirt / legs
   const COLOR_PLAYER_CLIMB = ['#ffd9a8', '#ffb45a', '#2d4a78']; // arms outstretched -> highlight
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  SWORD SPRITES — drawn next to the player; extends during attack.
+  // ───────────────────────────────────────────────────────────────────────
+  // Each entry: { dx, dy, ch }, dx/dy are offsets from the player sprite
+  // origin (top-left of 3x3 sprite).  When facing left, dx is mirrored to
+  // (2 - dx) and certain characters are swapped.
+  const SWORD_IDLE = [
+    { dx: 3, dy: 1, ch: '╾', color: '#d8e3f0' },
+    { dx: 3, dy: 2, ch: '┃', color: '#7a8090' },
+  ];
+  // Three attack frames timed across ATTACK_DUR.
+  const SWORD_FRAMES = [
+    // Frame 0 — wind up, sword raised behind/up
+    [
+      { dx: 2, dy: -1, ch: '╱', color: '#ffe69a' },
+      { dx: 3, dy: 0,  ch: '╱', color: '#ffd56b' },
+    ],
+    // Frame 1 — horizontal slash extended
+    [
+      { dx: 3, dy: 1, ch: '━', color: '#ffffff' },
+      { dx: 4, dy: 1, ch: '━', color: '#ffe69a' },
+      { dx: 5, dy: 1, ch: '➤', color: '#ffd56b' },
+      { dx: 3, dy: 0, ch: '✦', color: '#ffffff' },
+    ],
+    // Frame 2 — follow-through, sword down
+    [
+      { dx: 3, dy: 2, ch: '╲', color: '#ffd56b' },
+      { dx: 4, dy: 2, ch: '╲', color: '#caa040' },
+    ],
+  ];
+  function swordSwapChar(c) {
+    if (c === '╱') return '╲';
+    if (c === '╲') return '╱';
+    if (c === '➤') return '◀';
+    if (c === '╾') return '╼';
+    if (c === '╼') return '╾';
+    return c;
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  ENEMIES
+  // ───────────────────────────────────────────────────────────────────────
+  // Enemies are 3 cols wide × 3 rows tall and have a simple AI.  All
+  // contact-damage the player and can be killed with the sword.
+  const SLIME = [
+    '  ▄  ',
+    '◜◍◍◍◝',
+  ];
+  const SLIME_COLORS = ['#4ec46f', '#2f8e4a'];
+
+  const SKEL_A = [
+    ' Θ ',
+    '/┃\\',
+    '/ \\',
+  ];
+  const SKEL_B = [
+    ' Θ ',
+    '\\┃/',
+    ' ╲╱',
+  ];
+  const SKEL_COLORS = ['#e6e8ee', '#b8bcc4', '#9aa0aa'];
+
+  const GHOST_A = [
+    ' ⌒ ',
+    '◕◕◕',
+    '╲╳╱',
+  ];
+  const GHOST_B = [
+    ' ⌒ ',
+    '◔◔◔',
+    '╱╳╲',
+  ];
+  const GHOST_COLORS = ['#dfeaff', '#9fb8e0', '#5870a0'];
+
+  // Enemy registry — built fresh in resetGame() so death state resets.
+  let enemies = [];
+  function spawnEnemies() {
+    enemies = [
+      // Slime patrolling the bottom floor
+      { type: 'slime', x: 36, y: FLOOR_Y[2] - 2, vx: 4.5, facing: 1, hp: 1, maxHp: 1,
+        floorIdx: 2, minX: 24, maxX: 70, hop: 0, hurt: 0, dead: 0,
+        w: 5, h: 2, originY: FLOOR_Y[2] - 2 },
+      // Slime guarding the top floor near the key
+      { type: 'slime', x: 70, y: FLOOR_Y[0] - 2, vx: -4, facing: -1, hp: 1, maxHp: 1,
+        floorIdx: 0, minX: 58, maxX: 90, hop: 0, hurt: 0, dead: 0,
+        w: 5, h: 2, originY: FLOOR_Y[0] - 2 },
+      // Skeleton patrolling the middle platform
+      { type: 'skel', x: 56, y: FLOOR_Y[1] - 3, vx: -6, facing: -1, hp: 2, maxHp: 2,
+        floorIdx: 1, minX: 26, maxX: 80, walk: 0, hurt: 0, dead: 0,
+        w: 3, h: 3, originY: FLOOR_Y[1] - 3 },
+      // Skeleton on the bottom floor far side
+      { type: 'skel', x: 84, y: FLOOR_Y[2] - 3, vx: 5, facing: 1, hp: 2, maxHp: 2,
+        floorIdx: 2, minX: 74, maxX: 95, walk: 0, hurt: 0, dead: 0,
+        w: 3, h: 3, originY: FLOOR_Y[2] - 3 },
+      // Free-floating ghost between the floors
+      { type: 'ghost', cx: 50, cy: 13, rx: 14, ry: 4,
+        x: 49, y: 13, phase: 0, pSpeed: 0.9, hp: 1, maxHp: 1,
+        facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+    ];
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  ORNAMENT PATTERNS (parallax wallpaper behind the play area)
+  // ───────────────────────────────────────────────────────────────────────
+  // Each pattern is a list of strings that tile horizontally and
+  // vertically; we draw them inside the inter-floor "tiers" only.
+  const ORN_FAR = [
+    '   ·       ·         ·       ·         ·       ·         ·    ',
+    '       ·       ·         ·       ·         ·       ·       ·  ',
+    '   ✦       ·         ·       ✦         ·       ·         ✦    ',
+  ];
+  const ORN_MID = [
+    '    ◇          ◇          ◇          ◇          ◇          ◇  ',
+    '   ╱ ╲        ╱ ╲        ╱ ╲        ╱ ╲        ╱ ╲        ╱ ╲ ',
+    '  ╱   ╲      ╱   ╲      ╱   ╲      ╱   ╲      ╱   ╲      ╱   ╲',
+    '   ╲ ╱        ╲ ╱        ╲ ╱        ╲ ╱        ╲ ╱        ╲ ╱ ',
+    '    ◇          ◇          ◇          ◇          ◇          ◇  ',
+  ];
+  const ORN_NEAR = [
+    '┃           ┃           ┃           ┃           ┃           ┃   ',
+    '┃           ┃           ┃           ┃           ┃           ┃   ',
+    '╪═══════════╪═══════════╪═══════════╪═══════════╪═══════════╪═══',
+    '┃           ┃           ┃           ┃           ┃           ┃   ',
+    '┃           ┃           ┃           ┃           ┃           ┃   ',
+  ];
+  const ORN_VINE = [
+    '   ┊       ┊       ┊       ┊       ┊       ┊       ┊       ┊  ',
+    '  ╲┊╱     ╲┊╱     ╲┊╱     ╲┊╱     ╲┊╱     ╲┊╱     ╲┊╱     ╲┊╱ ',
+    '   ╳       ╳       ╳       ╳       ╳       ╳       ╳       ╳  ',
+  ];
 
   // Tree sprites
   const TREE_PINE = [
@@ -462,16 +603,27 @@
     const notes = [523, 659, 784, 1046, 784, 1046, 1318];
     notes.forEach((n, i) => setTimeout(() => blip(n, 0.20, 'triangle', 0.07), i * 110));
   }
+  function slashSound()    { blip(900, 0.08, 'square',   0.04, 380); }
+  function enemyHitSound() { blip(220, 0.12, 'sawtooth', 0.05, 90); }
+  function enemyDieSound() { noiseBurst(0.18, 0.06); setTimeout(() => blip(140, 0.18, 'sawtooth', 0.05, 60), 30); }
+  function hurtSound()     { noiseBurst(0.08, 0.04); blip(180, 0.20, 'square', 0.05, 80); }
+  function gameOverSound() {
+    const notes = [392, 370, 349, 330, 311, 277];
+    notes.forEach((n, i) => setTimeout(() => blip(n, 0.20, 'triangle', 0.06), i * 130));
+  }
 
   // ───────────────────────────────────────────────────────────────────────
   //  INPUT
   // ───────────────────────────────────────────────────────────────────────
   const keys = Object.create(null);
   let jumpQueued = false;
+  let attackQueued = false;
+  const ATTACK_KEYS = new Set(['x','X','z','Z','j','J']);
   window.addEventListener('keydown', (e) => {
     const k = e.key;
     if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Spacebar'].includes(k)) e.preventDefault();
     if (k === ' ' && !keys[' ']) jumpQueued = true;
+    if (ATTACK_KEYS.has(k) && !keys[k]) attackQueued = true;
     if (k === 'm' || k === 'M') {
       soundOn = !soundOn;
       sndBtn.textContent = soundOn ? 'ON' : 'OFF';
@@ -496,7 +648,7 @@
   let gameState = 'menu';   // menu | playing | won
   overlay.addEventListener('click', () => {
     ensureAudio();
-    if (gameState === 'won') resetGame();
+    if (gameState === 'won' || gameState === 'gameover') resetGame();
     overlay.classList.add('hidden');
     gameState = 'playing';
   });
@@ -511,11 +663,19 @@
     player.floorIdx = 2;
     player.onLadder = false;
     player.ladderIdx = -1;
+    player.hp = player.maxHp;
+    player.invul = 0;
+    player.attack = 0;
+    player.attackCool = 0;
+    player.hurtFlash = 0;
+    player.dead = false;
     KEY.collected = false;
     particles.length = 0;
     SHOOTING_STARS.length = 0;
     BATS.length = 0;
+    spawnEnemies();
   }
+  spawnEnemies();
 
   // ───────────────────────────────────────────────────────────────────────
   //  HELPERS
@@ -538,6 +698,7 @@
   function update(dt) {
     for (const s of STARS) s.phase += dt * s.speed;
     updateBackground(dt);
+    updateEnemies(dt);
 
     if (gameState !== 'playing') {
       updateParticles(dt);
@@ -678,11 +839,122 @@
       }
     }
 
+    // ── ATTACK INPUT ───────────────────────────────────────────────
+    if (player.attackCool > 0) player.attackCool -= dt;
+    if (player.attack > 0) player.attack -= dt;
+    if (attackQueued && player.attack <= 0 && player.attackCool <= 0 && !player.onLadder) {
+      player.attack = ATTACK_DUR;
+      player.attackCool = ATTACK_DUR + ATTACK_COOL;
+      slashSound();
+    }
+    attackQueued = false;
+
+    // ── COMBAT ─────────────────────────────────────────────────────
+    resolveCombat();
+
+    if (player.invul > 0)     player.invul -= dt;
+    if (player.hurtFlash > 0) player.hurtFlash -= dt;
+
+    // ── DEATH ───────────────────────────────────────────────────────
+    if (player.hp <= 0 && !player.dead) {
+      player.dead = true;
+      gameOverSound();
+      spawnParticles(player.x + 1, player.y + 1.5, { count: 30, colors: ['#ff6464','#ff9a3a','#ffd56b'] });
+      setTimeout(() => {
+        gameState = 'gameover';
+        overlayText.textContent = 'YOU DIED';
+        overlaySub.textContent = 'Click to try again';
+        overlay.classList.remove('hidden');
+      }, 700);
+    }
+
     // ── BLINK ───────────────────────────────────────────────────────
     player.blinkTimer -= dt;
     if (player.blinkTimer < -0.12) player.blinkTimer = 3 + Math.random() * 2;
 
     updateParticles(dt);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  ENEMY AI
+  // ───────────────────────────────────────────────────────────────────────
+  function updateEnemies(dt) {
+    for (const e of enemies) {
+      if (e.dead > 0) { e.dead -= dt; continue; }
+      if (e.hurt > 0) e.hurt -= dt;
+      if (e.type === 'slime') {
+        e.x += e.vx * dt;
+        if (e.x <= e.minX) { e.x = e.minX; e.vx = Math.abs(e.vx); e.facing = 1; }
+        else if (e.x >= e.maxX) { e.x = e.maxX; e.vx = -Math.abs(e.vx); e.facing = -1; }
+        e.hop += dt * 4.5;
+        e.y = e.originY - Math.abs(Math.sin(e.hop)) * 1.5;
+      } else if (e.type === 'skel') {
+        e.x += e.vx * dt;
+        if (e.x <= e.minX) { e.x = e.minX; e.vx = Math.abs(e.vx); e.facing = 1; }
+        else if (e.x >= e.maxX) { e.x = e.maxX; e.vx = -Math.abs(e.vx); e.facing = -1; }
+        e.walk += dt * 6;
+        e.y = e.originY;
+      } else if (e.type === 'ghost') {
+        e.phase += dt * e.pSpeed;
+        e.x = e.cx + Math.cos(e.phase) * e.rx - 1;
+        e.y = e.cy + Math.sin(e.phase * 1.4) * e.ry;
+        e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
+      }
+    }
+    // Cull dead enemies whose fade-out finished.
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      if (enemies[i].dead < -0.5) enemies.splice(i, 1);
+    }
+  }
+
+  function rectOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  function resolveCombat() {
+    // Player attack hitbox (only during middle portion of the swing).
+    const inHitFrame = player.attack > ATTACK_DUR * 0.25 && player.attack < ATTACK_DUR * 0.75;
+    if (inHitFrame) {
+      const hx = player.facing === 1 ? player.x + 3 : player.x - 3;
+      const hy = player.y;
+      const hw = 3, hh = 3;
+      for (const e of enemies) {
+        if (e.dead > 0 || e.hurt > 0) continue;
+        if (rectOverlap(hx, hy, hw, hh, e.x, e.y, e.w, e.h)) {
+          e.hp -= 1;
+          e.hurt = 0.25;
+          enemyHitSound();
+          spawnParticles(e.x + e.w / 2, e.y + e.h / 2, { count: 8, colors: ['#ffe69a','#ff9a3a','#ffffff'], chars: ['*','+','✦'] });
+          if (e.hp <= 0) {
+            e.dead = 0.45;
+            enemyDieSound();
+            spawnParticles(e.x + e.w / 2, e.y + e.h / 2, {
+              count: 18,
+              colors: e.type === 'ghost' ? ['#9fb8e0','#dfeaff','#ffffff'] : ['#3ea65a','#ffd56b','#ffffff'],
+              chars: ['*','·','✦','+'],
+            });
+          }
+        }
+      }
+    }
+    // Enemy contact damage
+    if (player.invul <= 0 && !player.dead) {
+      const px = player.x, py = player.y;
+      for (const e of enemies) {
+        if (e.dead > 0) continue;
+        if (rectOverlap(px, py, 3, 3, e.x, e.y, e.w, e.h)) {
+          player.hp -= 1;
+          player.invul = PLAYER_INVUL;
+          player.hurtFlash = 0.25;
+          hurtSound();
+          // Knockback away from enemy
+          const dir = (player.x + 1.5) < (e.x + e.w / 2) ? -1 : 1;
+          player.vx = dir * 8;
+          if (!player.onLadder) player.vy = -10;
+          break;
+        }
+      }
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────
@@ -735,6 +1007,39 @@
       if (c1 && c1 !== ' ') putChar(col, 4, c1, '#2c3656');
       if (c2 && c2 !== ' ') putChar(col, 5, c2, '#1d2540');
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  //  ORNAMENT WALLPAPER  (tiled parallax pattern inside each tier)
+  // ───────────────────────────────────────────────────────────────────────
+  function drawOrnamentLayer(pattern, yStart, yEnd, factor, color) {
+    const shift = (player.x - 48) * factor;
+    const ph = pattern.length;
+    for (let y = yStart; y < yEnd; y++) {
+      const row = pattern[((y - yStart) % ph + ph) % ph];
+      const pw = row.length;
+      for (let x = 0; x < COLS; x++) {
+        const sx = (((x + Math.round(shift)) % pw) + pw) % pw;
+        const ch = row[sx];
+        if (ch && ch !== ' ') putChar(x, y, ch, color);
+      }
+    }
+  }
+  function drawTierOrnaments(time) {
+    // Tier 1: rows 7..17 (between top and middle floors)
+    drawOrnamentLayer(ORN_FAR,  7, 17, 0.03, '#171a2e');
+    drawOrnamentLayer(ORN_MID,  7, 17, 0.10, '#1d2742');
+    drawOrnamentLayer(ORN_VINE, 7, 17, 0.16, '#22324a');
+    drawOrnamentLayer(ORN_NEAR, 7, 17, 0.22, '#2a2240');
+
+    // Tier 2: rows 19..29 (between middle and bottom floors)
+    drawOrnamentLayer(ORN_FAR,  19, 29, 0.03, '#161a26');
+    drawOrnamentLayer(ORN_MID,  19, 29, 0.10, '#1c2438');
+    drawOrnamentLayer(ORN_VINE, 19, 29, 0.16, '#1f2a3a');
+    drawOrnamentLayer(ORN_NEAR, 19, 29, 0.22, '#26203a');
+
+    // Bottom strip: rows 31..33 (cave floor texture)
+    drawOrnamentLayer(ORN_MID,  31, 33, 0.10, '#1a1722');
   }
 
   function drawFarTrees() {
@@ -805,6 +1110,80 @@
       if (glow < 0.25) continue;
       const a = glow.toFixed(2);
       putChar(Math.floor(x), Math.floor(y), '·', `rgba(190,255,140,${a})`);
+    }
+  }
+
+  function drawEnemy(e, time) {
+    const px = Math.round(e.x);
+    const py = Math.round(e.y);
+    let sprite, colors;
+    if (e.type === 'slime') {
+      sprite = SLIME;
+      colors = SLIME_COLORS;
+    } else if (e.type === 'skel') {
+      const a = ((e.walk | 0) % 2) === 0;
+      sprite = a ? SKEL_A : SKEL_B;
+      if (e.facing === -1) sprite = mirror(sprite);
+      colors = SKEL_COLORS;
+    } else if (e.type === 'ghost') {
+      const a = (((time * 4) | 0) % 2) === 0;
+      sprite = a ? GHOST_A : GHOST_B;
+      colors = GHOST_COLORS;
+    }
+    // Dead enemies fade and shake
+    if (e.dead > 0) {
+      const a = (e.dead / 0.45).toFixed(2);
+      const sh = (Math.random() - 0.5) * 1.2;
+      ctx.globalAlpha = parseFloat(a);
+      for (let r = 0; r < sprite.length; r++) putString(px + Math.round(sh), py + r, sprite[r], colors[r] || colors[colors.length - 1]);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    // Hurt flash → tint white
+    if (e.hurt > 0 && (((e.hurt * 30) | 0) % 2) === 0) {
+      for (let r = 0; r < sprite.length; r++) putString(px, py + r, sprite[r], '#ffffff');
+    } else {
+      // Ghost translucent
+      if (e.type === 'ghost') ctx.globalAlpha = 0.75;
+      for (let r = 0; r < sprite.length; r++) putString(px, py + r, sprite[r], colors[r] || colors[colors.length - 1]);
+      ctx.globalAlpha = 1;
+    }
+    // Tiny HP pip above multi-HP enemies
+    if (e.maxHp > 1) {
+      for (let i = 0; i < e.maxHp; i++) {
+        putChar(px + i, py - 1, i < e.hp ? '▮' : '▯', '#ff6464');
+      }
+    }
+  }
+
+  function drawSword(time) {
+    if (player.onLadder || player.state === 'sit') return;
+    const facingR = player.facing === 1;
+    const px = Math.round(player.x);
+    const py = Math.round(player.y);
+    let parts;
+    if (player.attack > 0) {
+      const t = (ATTACK_DUR - player.attack) / ATTACK_DUR; // 0..1
+      const frameIdx = t < 0.33 ? 0 : t < 0.66 ? 1 : 2;
+      parts = SWORD_FRAMES[frameIdx];
+    } else {
+      parts = SWORD_IDLE;
+    }
+    for (const p of parts) {
+      const dx = facingR ? p.dx : (2 - p.dx);
+      const ch = facingR ? p.ch : swordSwapChar(p.ch);
+      const cx = px + dx;
+      const cy = py + p.dy;
+      if (cx < 0 || cx >= COLS || cy < 0 || cy >= ROWS) continue;
+      putChar(cx, cy, ch, p.color);
+    }
+  }
+
+  function drawHP() {
+    // Three hearts top-left of the canvas.
+    for (let i = 0; i < player.maxHp; i++) {
+      const filled = i < player.hp;
+      putChar(1 + i * 2, 0, filled ? '♥' : '♡', filled ? '#ff5070' : '#552040');
     }
   }
 
@@ -909,7 +1288,15 @@
     }
     const px = Math.round(player.x);
     const py = Math.round(player.y);
-    putSpriteColored(px, py, sprite, colors);
+    // Invulnerability flicker (skip rendering every other tick)
+    const flicker = player.invul > 0 && (((player.invul * 18) | 0) % 2) === 0;
+    if (flicker) return;
+    // Hurt flash → blanket the sprite in red briefly
+    if (player.hurtFlash > 0) {
+      for (let r = 0; r < sprite.length; r++) putString(px, py + r, sprite[r], '#ff5070');
+    } else {
+      putSpriteColored(px, py, sprite, colors);
+    }
 
     // soft shadow underneath
     if (!player.onLadder) {
@@ -931,6 +1318,9 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawSky(time);
 
+    // Tier wallpaper (behind the play area, in front of dark fills)
+    drawTierOrnaments(time);
+
     // Background parallax + sky animations (back to front)
     drawMountains();
     drawFarTrees();
@@ -950,11 +1340,16 @@
     drawChest();
     drawKey(time);
 
+    // Enemies behind player so player passes in front during overlap.
+    for (const e of enemies) drawEnemy(e, time);
+
     drawPlayer(time);
+    drawSword(time);
 
     drawParticles();
 
     drawGround();
+    drawHP();
   }
 
   // ───────────────────────────────────────────────────────────────────────
