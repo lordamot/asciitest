@@ -305,25 +305,32 @@
       GOAL = 'pickup-key';
 
     } else if (n === 4) {
-      // ───── Screen 4: Snowy boss arena (3 floors + ladders)
+      // ───── Screen 4: Snowy boss arena (4 floors + ladders)
       setFloors([
-        { y: 12,  left: 2, right: 196, theme: 'snow' },
-        { y: 36, left: 2, right: 196, theme: 'snow' },
-        { y: 60, left: 2, right: 196, theme: 'snow' },
+        { y: 12, left: 2, right: 196, theme: 'snow' },   // 0 top (boss starts here)
+        { y: 28, left: 2, right: 196, theme: 'snow' },   // 1
+        { y: 44, left: 2, right: 196, theme: 'snow' },   // 2
+        { y: 60, left: 2, right: 196, theme: 'snow' },   // 3 bottom (player starts)
       ]);
       LADDERS = [
-        { x: 48, top: 12,  bottom: 36 },
-        { x: 152, top: 12,  bottom: 36 },
-        { x: 80, top: 36, bottom: 60 },
-        { x: 172, top: 36, bottom: 60 },
+        { x: 48,  top: 12, bottom: 28 },
+        { x: 152, top: 12, bottom: 28 },
+        { x: 30,  top: 28, bottom: 44 },
+        { x: 112, top: 28, bottom: 44 },
+        { x: 174, top: 28, bottom: 44 },
+        { x: 64,  top: 44, bottom: 60 },
+        { x: 138, top: 44, bottom: 60 },
+        { x: 186, top: 44, bottom: 60 },
       ];
       TREES = [
-        { x: 20, floorIdx: 2, kind: 'snow-pine' },
-        { x: 104, floorIdx: 2, kind: 'snow-pine' },
-        { x: 184, floorIdx: 2, kind: 'snow-pine' },
-        { x: 28, floorIdx: 1, kind: 'snow-pine' },
-        { x: 116, floorIdx: 1, kind: 'snow-pine' },
-        { x: 180, floorIdx: 1, kind: 'snow-pine' },
+        { x: 20,  floorIdx: 3, kind: 'snow-pine' },
+        { x: 104, floorIdx: 3, kind: 'snow-pine' },
+        { x: 184, floorIdx: 3, kind: 'snow-pine' },
+        { x: 28,  floorIdx: 2, kind: 'snow-pine' },
+        { x: 116, floorIdx: 2, kind: 'snow-pine' },
+        { x: 180, floorIdx: 2, kind: 'snow-pine' },
+        { x: 80,  floorIdx: 1, kind: 'snow-pine' },
+        { x: 160, floorIdx: 1, kind: 'snow-pine' },
       ];
       BUSHES = [];
       ROCKS = [];
@@ -568,20 +575,38 @@
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
     } else if (n === 4) {
-      // Snowy boss arena — just the snowman.
+      // Snowy boss arena — the snowman plus a handful of minions to
+      // make the climb up to the boss feel populated.
       enemies = [
+        // Boss
         { type: 'snowman',
           x: 140, y: FLOORS[0].y - 4,
           vx: 0, facing: -1,
           hp: 10, maxHp: 10, hurt: 0, dead: 0,
           w: 5, h: 4,
           floorIdx: 0, floorY: FLOORS[0].y,
-          climbing: null,            // null | 'up' | 'down'
+          climbing: null,
           targetFloorIdx: -1,
           targetFloorY: 0,
           walk: 0,
           repath: 0,
         },
+        // Bottom-floor patrolling slime
+        { type: 'slime', x: 90, y: FLOORS[3].y - 2, vx: 7, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 3, minX: 60, maxX: 150, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[3].y - 2 },
+        // 2nd-tier skeleton guarding the route up
+        { type: 'skel', x: 90, y: FLOORS[2].y - 3, vx: -10, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 2, minX: 50, maxX: 160, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[2].y - 3 },
+        // 3rd-tier slime just below the boss platform
+        { type: 'slime', x: 60, y: FLOORS[1].y - 2, vx: -6, facing: -1, hp: 1, maxHp: 1,
+          floorIdx: 1, minX: 30, maxX: 160, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[1].y - 2 },
+        // A ghost roaming between tiers (avoid in mid-jumps!)
+        { type: 'ghost', cx: 100, cy: 36, rx: 40, ry: 8,
+          x: 98, y: 36, phase: 0, pSpeed: 1.0, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
     } else {
       enemies = [];
@@ -1483,7 +1508,8 @@
     if (n === 1) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 2) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 3) return { x: 12, y: FLOORS[0].y - 3, floorIdx: 0 };
-    return            { x: 12, y: FLOORS[2].y - 3, floorIdx: 2 };
+    // n === 4 (snow boss): player starts on the new 4th (bottom) floor.
+    return            { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
   }
 
   function respawnPlayer() {
@@ -3231,7 +3257,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c2';
+    const v = 'c3';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
