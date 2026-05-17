@@ -39,46 +39,226 @@
   }
 
   // ───────────────────────────────────────────────────────────────────────
-  //  WORLD LAYOUT
+  //  WORLD LAYOUT (per-screen, populated by loadScreen())
   // ───────────────────────────────────────────────────────────────────────
-  // FLOOR_Y is the row of the floor's top edge.  Player feet sit on FLOOR_Y-1.
-  const FLOOR_Y = [6, 18, 30];   // top, middle, bottom
-  const FLOOR_LEFT = 1;
-  const FLOOR_RIGHT = COLS - 2;
+  // A "floor" is now a platform segment {y, left, right} so we can have
+  // partial floors (banks of a river) and flying platforms.
+  let FLOORS = [];
+  let FLOOR_Y = [];   // derived: FLOORS.map(f => f.y), for legacy lookups
+  let LADDERS = [];
+  let TREES = [];
+  let BUSHES = [];
+  let ROCKS = [];
+  let CHEST = null;     // { x, floorIdx }
+  let KEY = null;       // { x, floorIdx, collected }
+  let BOAT = null;      // screen 1: { x, y, w, baseY, phase, onBoard }
+  let RIVER = null;     // screen 1: { left, right, top }
+  let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
+  let GOAL = null;      // win-or-advance objective for the current screen
+  let screen = 0;
+  const NUM_SCREENS = 3;
 
-  const LADDERS = [
-    { x: 22, top: 6,  bottom: 18 },
-    { x: 70, top: 6,  bottom: 18 },
-    { x: 38, top: 18, bottom: 30 },
-    { x: 84, top: 18, bottom: 30 },
-  ];
+  function setFloors(arr) {
+    FLOORS = arr;
+    FLOOR_Y = arr.map(f => f.y);
+  }
 
-  // Trees / bushes / etc., positioned so they sit on a given floor.
-  const TREES = [
-    { x: 8,  floorIdx: 2, kind: 'pine' },
-    { x: 50, floorIdx: 2, kind: 'round' },
-    { x: 92, floorIdx: 2, kind: 'pine' },
-    { x: 15, floorIdx: 1, kind: 'round' },
-    { x: 56, floorIdx: 1, kind: 'pine' },
-    { x: 90, floorIdx: 1, kind: 'round' },
-    { x: 10, floorIdx: 0, kind: 'pine' },
-    { x: 80, floorIdx: 0, kind: 'round' },
-  ];
-  const BUSHES = [
-    { x: 18, floorIdx: 2 }, { x: 30, floorIdx: 2 },
-    { x: 60, floorIdx: 2 }, { x: 76, floorIdx: 2 },
-    { x: 26, floorIdx: 1 }, { x: 45, floorIdx: 1 },
-    { x: 76, floorIdx: 1 }, { x: 4,  floorIdx: 1 },
-    { x: 20, floorIdx: 0 }, { x: 70, floorIdx: 0 },
-  ];
-  const ROCKS = [
-    { x: 42, floorIdx: 2 }, { x: 88, floorIdx: 2 },
-    { x: 64, floorIdx: 1 }, { x: 30, floorIdx: 0 },
-  ];
+  // ───────────────────────────────────────────────────────────────────────
+  //  SCREEN LOADER  (each screen has its own platforms, decor, enemies)
+  // ───────────────────────────────────────────────────────────────────────
+  function loadScreen(n) {
+    screen = n;
+    BOAT = null;
+    RIVER = null;
+    MOV_PLATS = [];
+    KEY = null;
+    CHEST = null;
+    BUSHES = [];
+    ROCKS = [];
+    TREES = [];
+    LADDERS = [];
 
-  // Chest sits at top floor, key floats next to it.
-  const CHEST = { x: 44, floorIdx: 0 };
-  const KEY   = { x: 52, floorIdx: 0, collected: false };
+    if (n === 0) {
+      // ───── Screen 0: Forest at night
+      setFloors([
+        { y: 6,  left: 1, right: 98, theme: 'wood-light' },
+        { y: 18, left: 1, right: 98, theme: 'wood-mid' },
+        { y: 30, left: 1, right: 98, theme: 'wood-dark' },
+      ]);
+      LADDERS = [
+        { x: 22, top: 6,  bottom: 18 },
+        { x: 70, top: 6,  bottom: 18 },
+        { x: 38, top: 18, bottom: 30 },
+        { x: 84, top: 18, bottom: 30 },
+      ];
+      TREES = [
+        { x: 8,  floorIdx: 2, kind: 'pine' },
+        { x: 50, floorIdx: 2, kind: 'round' },
+        { x: 92, floorIdx: 2, kind: 'pine' },
+        { x: 15, floorIdx: 1, kind: 'round' },
+        { x: 56, floorIdx: 1, kind: 'pine' },
+        { x: 90, floorIdx: 1, kind: 'round' },
+        { x: 10, floorIdx: 0, kind: 'pine' },
+        { x: 80, floorIdx: 0, kind: 'round' },
+      ];
+      BUSHES = [
+        { x: 18, floorIdx: 2 }, { x: 30, floorIdx: 2 },
+        { x: 60, floorIdx: 2 }, { x: 76, floorIdx: 2 },
+        { x: 26, floorIdx: 1 }, { x: 45, floorIdx: 1 },
+        { x: 76, floorIdx: 1 }, { x: 4,  floorIdx: 1 },
+        { x: 20, floorIdx: 0 }, { x: 70, floorIdx: 0 },
+      ];
+      ROCKS = [
+        { x: 42, floorIdx: 2 }, { x: 88, floorIdx: 2 },
+        { x: 64, floorIdx: 1 }, { x: 30, floorIdx: 0 },
+      ];
+      CHEST = { x: 44, floorIdx: 0 };
+      KEY   = { x: 52, floorIdx: 0, collected: false };
+      GOAL  = 'pickup-key';
+
+    } else if (n === 1) {
+      // ───── Screen 1: River crossing with a boat
+      setFloors([
+        { y: 26, left: 1,  right: 24, theme: 'bank' },  // left bank
+        { y: 26, left: 76, right: 98, theme: 'bank' },  // right bank
+      ]);
+      RIVER = { left: 24, right: 76, top: 26 };
+      BOAT = {
+        baseX: 50, baseY: 25,
+        x: 30,             // updated each frame
+        y: 25,
+        w: 7, h: 1,
+        range: 22,         // half-amplitude
+        phase: -Math.PI / 2,
+        speed: 0.42,       // radians per second
+        prevX: 30,
+      };
+      // Add boat as a moving platform (last entry in FLOORS).
+      FLOORS.push({ y: BOAT.y, left: BOAT.x, right: BOAT.x + BOAT.w - 1, isBoat: true });
+      FLOOR_Y = FLOORS.map(f => f.y);
+      // No ladders; decorations.
+      TREES = [
+        { x: 8,  floorIdx: 0, kind: 'round' },
+        { x: 18, floorIdx: 0, kind: 'pine' },
+        { x: 82, floorIdx: 1, kind: 'pine' },
+        { x: 92, floorIdx: 1, kind: 'round' },
+      ];
+      BUSHES = [
+        { x: 4,  floorIdx: 0 }, { x: 14, floorIdx: 0 },
+        { x: 86, floorIdx: 1 }, { x: 96, floorIdx: 1 },
+      ];
+      ROCKS = [
+        { x: 22, floorIdx: 0 }, { x: 78, floorIdx: 1 },
+      ];
+      GOAL = 'reach-right';
+
+    } else if (n === 2) {
+      // ───── Screen 2: Flying platforms in the sky
+      setFloors([
+        { y: 30, left: 1,  right: 14, theme: 'cloud' },   // start
+        { y: 26, left: 18, right: 26, theme: 'cloud', oscY: { phase: 0,        amp: 1.2, speed: 1.0 } },
+        { y: 22, left: 32, right: 40, theme: 'cloud' },
+        { y: 18, left: 46, right: 54, theme: 'cloud', oscY: { phase: Math.PI/2,amp: 1.4, speed: 0.8 } },
+        { y: 14, left: 60, right: 68, theme: 'cloud' },
+        { y: 10, left: 74, right: 82, theme: 'cloud', oscY: { phase: Math.PI,  amp: 1.2, speed: 1.2 } },
+        { y: 6,  left: 86, right: 98, theme: 'cloud' },   // goal
+      ]);
+      // Stash baseY and originals for oscillation.
+      for (const f of FLOORS) {
+        if (f.oscY) { f.baseY = f.y; f.prevY = f.y; }
+      }
+      CHEST = { x: 92, floorIdx: 6 };
+      KEY   = { x: 92, floorIdx: 6, collected: false };
+      BUSHES = [];
+      ROCKS  = [];
+      TREES  = [];
+      LADDERS = [];
+      GOAL = 'final-key';
+    }
+
+    // Player starting position
+    if (n === 0)      { player.x = 6;  player.y = FLOORS[2].y - 3; player.floorIdx = 2; }
+    else if (n === 1) { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
+    else              { player.x = 4;  player.y = FLOORS[0].y - 3; player.floorIdx = 0; }
+    player.vx = 0; player.vy = 0;
+    player.state = 'stand'; player.facing = 1;
+    player.onLadder = false; player.ladderIdx = -1;
+    player.onBoat = false;
+
+    spawnEnemiesForScreen(n);
+  }
+
+  function advanceScreen() {
+    const next = screen + 1;
+    if (next >= NUM_SCREENS) {
+      gameState = 'won';
+      overlayText.textContent = 'YOU WIN!';
+      overlaySub.textContent = 'Click to play again';
+      overlay.classList.remove('hidden');
+      setTimeout(winSound, 200);
+      return;
+    }
+    // Brief flash then load next screen.
+    spawnParticles(player.x + 1, player.y + 1, {
+      count: 30,
+      colors: ['#ffd56b', '#ffe69a', '#ffffff'],
+      chars: ['✦', '*', '+', '·'],
+    });
+    setTimeout(() => {
+      loadScreen(next);
+      pickupSound();
+    }, 250);
+  }
+
+  function spawnEnemiesForScreen(n) {
+    if (n === 0) {
+      enemies = [
+        { type: 'slime', x: 36, y: FLOORS[2].y - 2, vx: 4.5, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 2, minX: 24, maxX: 70, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[2].y - 2 },
+        { type: 'slime', x: 70, y: FLOORS[0].y - 2, vx: -4, facing: -1, hp: 1, maxHp: 1,
+          floorIdx: 0, minX: 58, maxX: 90, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[0].y - 2 },
+        { type: 'skel', x: 56, y: FLOORS[1].y - 3, vx: -6, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 1, minX: 26, maxX: 80, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[1].y - 3 },
+        { type: 'skel', x: 84, y: FLOORS[2].y - 3, vx: 5, facing: 1, hp: 2, maxHp: 2,
+          floorIdx: 2, minX: 74, maxX: 95, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[2].y - 3 },
+        { type: 'ghost', cx: 50, cy: 13, rx: 14, ry: 4,
+          x: 49, y: 13, phase: 0, pSpeed: 0.9, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+      ];
+    } else if (n === 1) {
+      // River screen: two patrolling slimes on the banks + a ghost over water
+      enemies = [
+        { type: 'slime', x: 14, y: FLOORS[0].y - 2, vx: 3.5, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 0, minX: 4, maxX: 22, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[0].y - 2 },
+        { type: 'slime', x: 82, y: FLOORS[1].y - 2, vx: 3.5, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 1, minX: 78, maxX: 94, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[1].y - 2 },
+        { type: 'ghost', cx: 50, cy: 19, rx: 18, ry: 3,
+          x: 49, y: 19, phase: 0, pSpeed: 1.1, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+      ];
+    } else if (n === 2) {
+      // Sky screen: a couple of ghosts patrolling between platforms
+      enemies = [
+        { type: 'ghost', cx: 35, cy: 22, rx: 10, ry: 3,
+          x: 34, y: 22, phase: 0, pSpeed: 1.2, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+        { type: 'ghost', cx: 65, cy: 14, rx: 8, ry: 2,
+          x: 64, y: 14, phase: Math.PI, pSpeed: 1.0, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+        { type: 'slime', x: 75, y: FLOORS[5].y - 2, vx: 2.5, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 5, minX: 74, maxX: 78, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[5].y - 2 },
+      ];
+    } else {
+      enemies = [];
+    }
+  }
 
   // ───────────────────────────────────────────────────────────────────────
   //  STARFIELD + MOON
@@ -196,8 +376,8 @@
   const PHYS = {
     walkSpeed: 12,        // cells per second
     climbSpeed: 8,
-    jumpV: -22,           // initial vy on jump
-    gravity: 70,
+    jumpV: -28,           // initial vy on jump
+    gravity: 65,
     maxFall: 32,
   };
 
@@ -338,32 +518,8 @@
   ];
   const GHOST_COLORS = ['#dfeaff', '#9fb8e0', '#5870a0'];
 
-  // Enemy registry — built fresh in resetGame() so death state resets.
+  // Enemy registry — built fresh by loadScreen() so death state resets.
   let enemies = [];
-  function spawnEnemies() {
-    enemies = [
-      // Slime patrolling the bottom floor
-      { type: 'slime', x: 36, y: FLOOR_Y[2] - 2, vx: 4.5, facing: 1, hp: 1, maxHp: 1,
-        floorIdx: 2, minX: 24, maxX: 70, hop: 0, hurt: 0, dead: 0,
-        w: 5, h: 2, originY: FLOOR_Y[2] - 2 },
-      // Slime guarding the top floor near the key
-      { type: 'slime', x: 70, y: FLOOR_Y[0] - 2, vx: -4, facing: -1, hp: 1, maxHp: 1,
-        floorIdx: 0, minX: 58, maxX: 90, hop: 0, hurt: 0, dead: 0,
-        w: 5, h: 2, originY: FLOOR_Y[0] - 2 },
-      // Skeleton patrolling the middle platform
-      { type: 'skel', x: 56, y: FLOOR_Y[1] - 3, vx: -6, facing: -1, hp: 2, maxHp: 2,
-        floorIdx: 1, minX: 26, maxX: 80, walk: 0, hurt: 0, dead: 0,
-        w: 3, h: 3, originY: FLOOR_Y[1] - 3 },
-      // Skeleton on the bottom floor far side
-      { type: 'skel', x: 84, y: FLOOR_Y[2] - 3, vx: 5, facing: 1, hp: 2, maxHp: 2,
-        floorIdx: 2, minX: 74, maxX: 95, walk: 0, hurt: 0, dead: 0,
-        w: 3, h: 3, originY: FLOOR_Y[2] - 3 },
-      // Free-floating ghost between the floors
-      { type: 'ghost', cx: 50, cy: 13, rx: 14, ry: 4,
-        x: 49, y: 13, phase: 0, pSpeed: 0.9, hp: 1, maxHp: 1,
-        facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
-    ];
-  }
 
   // ───────────────────────────────────────────────────────────────────────
   //  ORNAMENT PATTERNS (parallax wallpaper behind the play area)
@@ -548,6 +704,49 @@
   }
 
   // ───────────────────────────────────────────────────────────────────────
+  //  MOVING PLATFORMS  (boat on screen 1; oscillating platforms on screen 2)
+  // ───────────────────────────────────────────────────────────────────────
+  // For each moving floor we record dx/dy from the previous frame so the
+  // player riding on it gets carried along.  Player position is updated
+  // BEFORE input/gravity so subsequent collision still works cleanly.
+  function updatePlatforms(dt) {
+    if (BOAT) {
+      BOAT.prevX = BOAT.x;
+      BOAT.phase += dt * BOAT.speed;
+      BOAT.x = BOAT.baseX + Math.sin(BOAT.phase) * BOAT.range;
+      // Update the corresponding FLOOR entry so collision uses fresh bounds.
+      const f = FLOORS.find(fl => fl.isBoat);
+      if (f) {
+        f.left = BOAT.x;
+        f.right = BOAT.x + BOAT.w - 1;
+      }
+    }
+    for (const f of FLOORS) {
+      if (f.oscY) {
+        f.prevY = f.y;
+        f.oscY.phase += dt * f.oscY.speed;
+        f.y = f.baseY + Math.sin(f.oscY.phase) * f.oscY.amp;
+      }
+    }
+    FLOOR_Y = FLOORS.map(f => f.y);
+  }
+
+  function carryPlayerOnPlatform() {
+    if (player.onLadder || player.dead) return;
+    if (player.vy !== 0) return;
+    const cur = FLOORS[player.floorIdx];
+    if (!cur) return;
+    if (cur.isBoat && BOAT) {
+      const dx = BOAT.x - BOAT.prevX;
+      player.x += dx;
+    }
+    if (cur.oscY) {
+      const dy = cur.y - cur.prevY;
+      player.y += dy;
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
   //  AUDIO
   // ───────────────────────────────────────────────────────────────────────
   let audioCtx = null;
@@ -654,28 +853,18 @@
   });
 
   function resetGame() {
-    player.x = 6;
-    player.y = FLOOR_Y[2] - 3;
-    player.vx = 0;
-    player.vy = 0;
-    player.facing = 1;
-    player.state = 'stand';
-    player.floorIdx = 2;
-    player.onLadder = false;
-    player.ladderIdx = -1;
     player.hp = player.maxHp;
     player.invul = 0;
     player.attack = 0;
     player.attackCool = 0;
     player.hurtFlash = 0;
     player.dead = false;
-    KEY.collected = false;
     particles.length = 0;
     SHOOTING_STARS.length = 0;
     BATS.length = 0;
-    spawnEnemies();
+    loadScreen(0);
   }
-  spawnEnemies();
+  loadScreen(0);
 
   // ───────────────────────────────────────────────────────────────────────
   //  HELPERS
@@ -698,12 +887,15 @@
   function update(dt) {
     for (const s of STARS) s.phase += dt * s.speed;
     updateBackground(dt);
+    updatePlatforms(dt);
     updateEnemies(dt);
 
     if (gameState !== 'playing') {
       updateParticles(dt);
       return;
     }
+
+    carryPlayerOnPlatform();
 
     const left  = !!(keys['ArrowLeft']  || keys['a'] || keys['A']);
     const right = !!(keys['ArrowRight'] || keys['d'] || keys['D']);
@@ -787,6 +979,18 @@
         player.state = 'jump';
       }
 
+      // Walk off the edge of a partial platform → start falling.
+      if (player.vy === 0 && !player.onLadder) {
+        const cur = FLOORS[player.floorIdx];
+        const pcx = player.x + 1;
+        if (cur && (pcx < cur.left - 0.5 || pcx > cur.right + 0.5)) {
+          player.vy = 0.1;
+          player.state = 'jump';
+          player.floorIdx = -1;
+          player.onBoat = false;
+        }
+      }
+
       // Gravity
       if (!onGround) player.vy = clamp(player.vy + PHYS.gravity * dt, -100, PHYS.maxFall);
 
@@ -794,17 +998,21 @@
       const prevY = player.y;
       player.x += player.vx * dt;
       player.y += player.vy * dt;
-      player.x = clamp(player.x, FLOOR_LEFT, FLOOR_RIGHT - 2);
+      player.x = clamp(player.x, -1, COLS - 2);
 
-      // Land on floor
+      // Land on a platform (partial floors must check horizontal range too).
       const footRow = player.y + 3;
-      for (let i = 0; i < FLOOR_Y.length; i++) {
-        const fy = FLOOR_Y[i];
+      const pcx = player.x + 1;     // player center column
+      for (let i = 0; i < FLOORS.length; i++) {
+        const f = FLOORS[i];
+        const fy = f.y;
+        const inX = pcx >= f.left - 0.5 && pcx <= f.right + 0.5;
         const prevFoot = prevY + 3;
-        if (prevFoot <= fy && footRow >= fy && player.vy >= 0) {
+        if (inX && prevFoot <= fy && footRow >= fy && player.vy >= 0) {
           player.y = fy - 3;
           player.vy = 0;
           player.floorIdx = i;
+          player.onBoat = !!f.isBoat;
           if (player.state === 'jump') { player.state = 'stand'; landSound(); }
           break;
         }
@@ -820,23 +1028,45 @@
       }
     }
 
-    // ── KEY PICKUP ──────────────────────────────────────────────────
-    if (!KEY.collected) {
-      const keyRow = FLOOR_Y[KEY.floorIdx] - 2;
+    // ── KEY PICKUP / SCREEN GOAL ────────────────────────────────────
+    if (KEY && !KEY.collected) {
+      const keyRow = FLOORS[KEY.floorIdx].y - 2;
       const dx = (player.x + 1) - (KEY.x + 1);
       const dy = (player.y + 1.5) - (keyRow + 0.5);
       if (Math.abs(dx) < 2 && Math.abs(dy) < 2.5) {
         KEY.collected = true;
         pickupSound();
         spawnParticles(KEY.x + 1, keyRow);
-        setTimeout(winSound, 400);
-        setTimeout(() => {
-          gameState = 'won';
-          overlayText.textContent = 'YOU GOT THE KEY!';
-          overlaySub.textContent = 'Click to play again';
-          overlay.classList.remove('hidden');
-        }, 800);
+        if (GOAL === 'pickup-key') {
+          advanceScreen();
+        } else if (GOAL === 'final-key') {
+          setTimeout(winSound, 400);
+          setTimeout(() => {
+            gameState = 'won';
+            overlayText.textContent = 'YOU WIN!';
+            overlaySub.textContent = 'Click to play again';
+            overlay.classList.remove('hidden');
+          }, 800);
+        }
       }
+    }
+    if (GOAL === 'reach-right' && player.x >= COLS - 4 && !player.onLadder && player.vy === 0) {
+      advanceScreen();
+    }
+
+    // ── OUT-OF-BOUNDS DEATH (fell off the world) ────────────────────
+    if (player.y > ROWS + 1 && !player.dead) {
+      player.hp = 0;
+      hurtSound();
+    }
+    // Falling into the river on screen 1 → instant death
+    if (screen === 1 && RIVER && !player.dead && player.vy > 0 &&
+        player.x + 1 >= RIVER.left && player.x + 1 <= RIVER.right &&
+        player.y + 3 >= RIVER.top + 1 && !player.onBoat) {
+      // Player has hit the water
+      player.hp = 0;
+      hurtSound();
+      spawnParticles(player.x + 1, RIVER.top, { count: 20, colors: ['#7fc8ff', '#a8e0ff', '#ffffff'], chars: ['~','≈','*','·'] });
     }
 
     // ── ATTACK INPUT ───────────────────────────────────────────────
@@ -883,12 +1113,15 @@
       if (e.dead > 0) { e.dead -= dt; continue; }
       if (e.hurt > 0) e.hurt -= dt;
       if (e.type === 'slime') {
+        // Track the platform's current y (it may oscillate).
+        if (e.floorIdx >= 0 && FLOORS[e.floorIdx]) e.originY = FLOORS[e.floorIdx].y - 2;
         e.x += e.vx * dt;
         if (e.x <= e.minX) { e.x = e.minX; e.vx = Math.abs(e.vx); e.facing = 1; }
         else if (e.x >= e.maxX) { e.x = e.maxX; e.vx = -Math.abs(e.vx); e.facing = -1; }
         e.hop += dt * 4.5;
         e.y = e.originY - Math.abs(Math.sin(e.hop)) * 1.5;
       } else if (e.type === 'skel') {
+        if (e.floorIdx >= 0 && FLOORS[e.floorIdx]) e.originY = FLOORS[e.floorIdx].y - 3;
         e.x += e.vx * dt;
         if (e.x <= e.minX) { e.x = e.minX; e.vx = Math.abs(e.vx); e.facing = 1; }
         else if (e.x >= e.maxX) { e.x = e.maxX; e.vx = -Math.abs(e.vx); e.facing = -1; }
@@ -961,39 +1194,89 @@
   //  DRAW
   // ───────────────────────────────────────────────────────────────────────
   function drawSky(time) {
-    // gradient sky
-    const grad = ctx.createLinearGradient(0, 0, 0, FLOOR_Y[0] * CHAR_H);
-    grad.addColorStop(0, '#0a0e22');
-    grad.addColorStop(0.7, '#162244');
-    grad.addColorStop(1, '#2a1a3a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, FLOOR_Y[0] * CHAR_H);
+    if (screen === 0) {
+      // ── Night sky (forest)
+      const grad = ctx.createLinearGradient(0, 0, 0, FLOORS[0].y * CHAR_H);
+      grad.addColorStop(0, '#0a0e22');
+      grad.addColorStop(0.7, '#162244');
+      grad.addColorStop(1, '#2a1a3a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, FLOORS[0].y * CHAR_H);
 
-    // tier backgrounds (subtle)
-    ctx.fillStyle = '#0c0e18';
-    ctx.fillRect(0, FLOOR_Y[0] * CHAR_H, canvas.width, (FLOOR_Y[1] - FLOOR_Y[0]) * CHAR_H);
-    ctx.fillStyle = '#0a0d16';
-    ctx.fillRect(0, FLOOR_Y[1] * CHAR_H, canvas.width, (FLOOR_Y[2] - FLOOR_Y[1]) * CHAR_H);
-    ctx.fillStyle = '#080a12';
-    ctx.fillRect(0, FLOOR_Y[2] * CHAR_H, canvas.width, (ROWS - FLOOR_Y[2]) * CHAR_H);
+      ctx.fillStyle = '#0c0e18';
+      ctx.fillRect(0, FLOORS[0].y * CHAR_H, canvas.width, (FLOORS[1].y - FLOORS[0].y) * CHAR_H);
+      ctx.fillStyle = '#0a0d16';
+      ctx.fillRect(0, FLOORS[1].y * CHAR_H, canvas.width, (FLOORS[2].y - FLOORS[1].y) * CHAR_H);
+      ctx.fillStyle = '#080a12';
+      ctx.fillRect(0, FLOORS[2].y * CHAR_H, canvas.width, (ROWS - FLOORS[2].y) * CHAR_H);
 
-    // moon glow
-    const mgx = (MOON.x + 4) * CHAR_W, mgy = (MOON.y + 1) * CHAR_H;
-    const mg = ctx.createRadialGradient(mgx, mgy, 0, mgx, mgy, 90);
-    mg.addColorStop(0, 'rgba(255,230,160,0.20)');
-    mg.addColorStop(1, 'rgba(255,230,160,0)');
-    ctx.fillStyle = mg;
-    ctx.fillRect(mgx - 90, mgy - 90, 180, 180);
+      // moon glow
+      const mgx = (MOON.x + 4) * CHAR_W, mgy = (MOON.y + 1) * CHAR_H;
+      const mg = ctx.createRadialGradient(mgx, mgy, 0, mgx, mgy, 90);
+      mg.addColorStop(0, 'rgba(255,230,160,0.20)');
+      mg.addColorStop(1, 'rgba(255,230,160,0)');
+      ctx.fillStyle = mg;
+      ctx.fillRect(mgx - 90, mgy - 90, 180, 180);
 
-    // stars
-    for (const s of STARS) {
-      const tw = 0.5 + 0.5 * Math.sin(s.phase + time * 2);
-      const color = `rgba(${200 + Math.floor(tw*55)},${220 + Math.floor(tw*35)},255,${0.4 + tw*0.6})`;
-      putChar(s.x | 0, s.y | 0, s.ch, color);
+      // stars
+      for (const s of STARS) {
+        const tw = 0.5 + 0.5 * Math.sin(s.phase + time * 2);
+        const color = `rgba(${200 + Math.floor(tw*55)},${220 + Math.floor(tw*35)},255,${0.4 + tw*0.6})`;
+        putChar(s.x | 0, s.y | 0, s.ch, color);
+      }
+      putSpriteColored(MOON.x, MOON.y, MOON_SPRITE, '#fff3c4');
+
+    } else if (screen === 1) {
+      // ── Dawn sky (river)
+      const grad = ctx.createLinearGradient(0, 0, 0, (RIVER ? RIVER.top : 26) * CHAR_H);
+      grad.addColorStop(0,    '#1a2050');
+      grad.addColorStop(0.45, '#7a5078');
+      grad.addColorStop(0.8,  '#ffae6a');
+      grad.addColorStop(1,    '#ffd87a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, (RIVER ? RIVER.top : 26) * CHAR_H);
+
+      // Sun
+      const sx = 78, sy = 8;
+      const sgx = (sx + 1) * CHAR_W, sgy = (sy + 1) * CHAR_H;
+      const sg = ctx.createRadialGradient(sgx, sgy, 0, sgx, sgy, 110);
+      sg.addColorStop(0, 'rgba(255,220,140,0.55)');
+      sg.addColorStop(1, 'rgba(255,220,140,0)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(sgx - 110, sgy - 110, 220, 220);
+      putString(sx, sy,     ' ╭───╮ ', '#fff5b8');
+      putString(sx, sy + 1, '(  ☀  )', '#ffd56b');
+      putString(sx, sy + 2, ' ╰───╯ ', '#fff5b8');
+
+      // A few muted stars still visible
+      for (const s of STARS) {
+        if (s.y > 3) continue;
+        const tw = 0.5 + 0.5 * Math.sin(s.phase + time * 2);
+        const color = `rgba(255,240,200,${0.15 + tw*0.25})`;
+        putChar(s.x | 0, s.y | 0, s.ch, color);
+      }
+
+    } else if (screen === 2) {
+      // ── Day sky (flying platforms)
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0,    '#3a7ed0');
+      grad.addColorStop(0.55, '#7cb8e8');
+      grad.addColorStop(1,    '#c8e2f6');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Sun
+      const sx = 8, sy = 3;
+      const sgx = (sx + 2) * CHAR_W, sgy = (sy + 1) * CHAR_H;
+      const sg = ctx.createRadialGradient(sgx, sgy, 0, sgx, sgy, 130);
+      sg.addColorStop(0, 'rgba(255,235,170,0.55)');
+      sg.addColorStop(1, 'rgba(255,235,170,0)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(sgx - 130, sgy - 130, 260, 260);
+      putString(sx, sy,     ' ╭───╮ ', '#fff5b8');
+      putString(sx, sy + 1, '(  ☀  )', '#ffe888');
+      putString(sx, sy + 2, ' ╰───╯ ', '#fff5b8');
     }
-
-    // moon
-    putSpriteColored(MOON.x, MOON.y, MOON_SPRITE, '#fff3c4');
   }
 
   function drawMountains() {
@@ -1026,20 +1309,25 @@
     }
   }
   function drawTierOrnaments(time) {
-    // Tier 1: rows 7..17 (between top and middle floors)
-    drawOrnamentLayer(ORN_FAR,  7, 17, 0.03, '#171a2e');
-    drawOrnamentLayer(ORN_MID,  7, 17, 0.10, '#1d2742');
-    drawOrnamentLayer(ORN_VINE, 7, 17, 0.16, '#22324a');
-    drawOrnamentLayer(ORN_NEAR, 7, 17, 0.22, '#2a2240');
-
-    // Tier 2: rows 19..29 (between middle and bottom floors)
-    drawOrnamentLayer(ORN_FAR,  19, 29, 0.03, '#161a26');
-    drawOrnamentLayer(ORN_MID,  19, 29, 0.10, '#1c2438');
-    drawOrnamentLayer(ORN_VINE, 19, 29, 0.16, '#1f2a3a');
-    drawOrnamentLayer(ORN_NEAR, 19, 29, 0.22, '#26203a');
-
-    // Bottom strip: rows 31..33 (cave floor texture)
-    drawOrnamentLayer(ORN_MID,  31, 33, 0.10, '#1a1722');
+    if (screen === 0) {
+      // Tier 1: rows 7..17 (between top and middle floors)
+      drawOrnamentLayer(ORN_FAR,  7, 17, 0.03, '#171a2e');
+      drawOrnamentLayer(ORN_MID,  7, 17, 0.10, '#1d2742');
+      drawOrnamentLayer(ORN_VINE, 7, 17, 0.16, '#22324a');
+      drawOrnamentLayer(ORN_NEAR, 7, 17, 0.22, '#2a2240');
+      // Tier 2: rows 19..29 (between middle and bottom floors)
+      drawOrnamentLayer(ORN_FAR,  19, 29, 0.03, '#161a26');
+      drawOrnamentLayer(ORN_MID,  19, 29, 0.10, '#1c2438');
+      drawOrnamentLayer(ORN_VINE, 19, 29, 0.16, '#1f2a3a');
+      drawOrnamentLayer(ORN_NEAR, 19, 29, 0.22, '#26203a');
+      // Bottom strip
+      drawOrnamentLayer(ORN_MID,  31, 33, 0.10, '#1a1722');
+    } else if (screen === 2) {
+      // Cloud-and-airy ornaments behind the flying platforms
+      drawOrnamentLayer(ORN_FAR,  0, ROWS - 1, 0.04, 'rgba(255,255,255,0.35)');
+      drawOrnamentLayer(ORN_MID,  0, ROWS - 1, 0.10, 'rgba(255,255,255,0.18)');
+      drawOrnamentLayer(ORN_VINE, 0, ROWS - 1, 0.18, 'rgba(255,255,255,0.12)');
+    }
   }
 
   function drawFarTrees() {
@@ -1054,6 +1342,52 @@
         const ch = FAR_TREES[src];
         if (ch && ch !== ' ') putChar(col, row, ch, '#1f3b2c');
       }
+    }
+  }
+
+  function drawRiver(time) {
+    if (!RIVER) return;
+    // Water rows from RIVER.top down to bottom of canvas.
+    for (let y = RIVER.top; y < ROWS - 1; y++) {
+      for (let x = RIVER.left; x <= RIVER.right; x++) {
+        const wave = Math.sin((x * 0.35) + time * 2.2 + y * 0.6);
+        const n = (x * 13 + y * 7 + Math.floor(time * 8)) & 0x7fffffff;
+        const r = (n % 7);
+        let ch;
+        if (wave > 0.5)      ch = '≈';
+        else if (wave > 0.0) ch = '~';
+        else if (wave > -0.5) ch = '─';
+        else                  ch = (r === 0) ? '·' : ' ';
+        if (ch === ' ') continue;
+        const depth = (y - RIVER.top) / (ROWS - 1 - RIVER.top);
+        const r1 = 90 + Math.floor((1 - depth) * 60);
+        const g1 = 140 + Math.floor((1 - depth) * 70);
+        const b1 = 200 + Math.floor((1 - depth) * 45);
+        const a  = (0.4 + 0.4 * (wave * 0.5 + 0.5)).toFixed(2);
+        putChar(x, y, ch, `rgba(${r1},${g1},${b1},${a})`);
+      }
+    }
+    // Foam at the bank edges where land meets water
+    for (let y = RIVER.top; y <= RIVER.top + 1; y++) {
+      putChar(RIVER.left, y, '░', '#bfe2ff');
+      putChar(RIVER.right, y, '░', '#bfe2ff');
+    }
+  }
+
+  function drawBoat(time) {
+    if (!BOAT) return;
+    const bx = Math.round(BOAT.x);
+    const by = Math.round(BOAT.y);
+    const bob = Math.sin(time * 2.5 + BOAT.phase) * 0.2;
+    const deckY = by + Math.round(bob);
+    // Deck (sits on the water line at by)
+    putString(bx, deckY,     '▔▀▀▀▀▀▔', '#caa070');
+    putString(bx, deckY + 1, '╲▒▒▒▒▒╱', '#7a4a22');
+    // Wake
+    if ((BOAT.x - BOAT.prevX) > 0) {
+      putChar(bx - 1, deckY + 1, '≈', '#bfe2ff');
+    } else if ((BOAT.x - BOAT.prevX) < 0) {
+      putChar(bx + 7, deckY + 1, '≈', '#bfe2ff');
     }
   }
 
@@ -1188,21 +1522,47 @@
   }
 
   function drawFloors() {
-    for (let i = 0; i < FLOOR_Y.length; i++) {
-      const y = FLOOR_Y[i];
-      // platform top: heavy line with subtle grain
-      for (let x = FLOOR_LEFT; x <= FLOOR_RIGHT; x++) {
-        const grain = ((x * 7 + i * 31) % 13) === 0 ? '═' : '━';
-        putChar(x, y, grain, i === 0 ? '#caa070' : i === 1 ? '#b58952' : '#a07a44');
+    for (let i = 0; i < FLOORS.length; i++) {
+      const f = FLOORS[i];
+      if (f.isBoat) continue; // boat drawn separately
+      const y = Math.round(f.y);
+      const left = Math.round(f.left);
+      const right = Math.round(f.right);
+      const theme = f.theme || 'wood-light';
+      let topColor, shadowColor, capColor;
+      if (theme === 'wood-light')  { topColor = '#caa070'; shadowColor = '#704830'; capColor = '#7a5a32'; }
+      else if (theme === 'wood-mid')   { topColor = '#b58952'; shadowColor = '#5c3a24'; capColor = '#7a5a32'; }
+      else if (theme === 'wood-dark')  { topColor = '#a07a44'; shadowColor = '#4a2e1c'; capColor = '#7a5a32'; }
+      else if (theme === 'bank')   { topColor = '#5fa64a'; shadowColor = '#3b6230'; capColor = '#3b6230'; }
+      else if (theme === 'cloud')  { topColor = '#e8efff'; shadowColor = '#8a9ec8'; capColor = '#6680b0'; }
+      else                          { topColor = '#caa070'; shadowColor = '#704830'; capColor = '#7a5a32'; }
+      // Platform top
+      for (let x = left; x <= right; x++) {
+        let grain;
+        if (theme === 'cloud') {
+          grain = ((x * 5 + i * 7) % 4 === 0) ? '▔' : '─';
+        } else if (theme === 'bank') {
+          grain = ((x * 7 + i * 31) % 5) === 0 ? '▒' : '═';
+        } else {
+          grain = ((x * 7 + i * 31) % 13) === 0 ? '═' : '━';
+        }
+        putChar(x, y, grain, topColor);
       }
-      // shadow line below
-      for (let x = FLOOR_LEFT; x <= FLOOR_RIGHT; x++) {
-        const ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
-        putChar(x, y + 1, ch, i === 0 ? '#704830' : i === 1 ? '#5c3a24' : '#4a2e1c');
+      // Shadow / hull row
+      for (let x = left; x <= right; x++) {
+        let ch;
+        if (theme === 'cloud') {
+          ch = ((x + i) % 3 === 0) ? '░' : ((x + i) % 3 === 1 ? '▒' : ' ');
+        } else if (theme === 'bank') {
+          ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
+        } else {
+          ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
+        }
+        if (ch !== ' ') putChar(x, y + 1, ch, shadowColor);
       }
-      // edge caps
-      putChar(FLOOR_LEFT - 1, y, '╞', '#7a5a32');
-      putChar(FLOOR_RIGHT + 1, y, '╡', '#7a5a32');
+      // Edge caps — only on partial floors that don't reach the world edge.
+      if (left > 0)        putChar(left - 1,  y, theme === 'cloud' ? '╮' : '╞', capColor);
+      if (right < COLS - 1) putChar(right + 1, y, theme === 'cloud' ? '╭' : '╡', capColor);
     }
   }
 
@@ -1224,7 +1584,7 @@
   }
 
   function drawTree(t) {
-    const y = FLOOR_Y[t.floorIdx] - 6;
+    const y = FLOORS[t.floorIdx].y - 6;
     const sprite = t.kind === 'pine' ? TREE_PINE : TREE_ROUND;
     const colors = t.kind === 'pine' ? TREE_PINE_COLORS : TREE_ROUND_COLORS;
     // Top of the tree sways with the wind; trunk stays put.
@@ -1236,22 +1596,23 @@
     }
   }
   function drawBush(b) {
-    const y = FLOOR_Y[b.floorIdx] - 2;
+    const y = FLOORS[b.floorIdx].y - 2;
     putSpriteColored(b.x - 2, y, BUSH, BUSH_COLORS);
   }
   function drawRock(r) {
-    const y = FLOOR_Y[r.floorIdx] - 2;
+    const y = FLOORS[r.floorIdx].y - 2;
     putSpriteColored(r.x - 2, y, ROCK, ROCK_COLORS);
   }
 
   function drawChest() {
-    const y = FLOOR_Y[CHEST.floorIdx] - 3;
+    if (!CHEST) return;
+    const y = FLOORS[CHEST.floorIdx].y - 3;
     putSpriteColored(CHEST.x - 4, y, CHEST_SPRITE, CHEST_COLORS);
   }
 
   function drawKey(time) {
-    if (KEY.collected) return;
-    const baseY = FLOOR_Y[KEY.floorIdx] - 2;
+    if (!KEY || KEY.collected) return;
+    const baseY = FLOORS[KEY.floorIdx].y - 2;
     const bob = Math.sin(time * 3) * 0.4;
     const drawY = Math.round(baseY + bob);
     const frame = (((time * 4) | 0) % 2);
@@ -1299,8 +1660,8 @@
     }
 
     // soft shadow underneath
-    if (!player.onLadder) {
-      const fy = FLOOR_Y[player.floorIdx];
+    if (!player.onLadder && FLOORS[player.floorIdx]) {
+      const fy = FLOORS[player.floorIdx].y;
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect((px) * CHAR_W, (fy - 0.2) * CHAR_H, 3 * CHAR_W, 3);
     }
@@ -1318,15 +1679,23 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawSky(time);
 
-    // Tier wallpaper (behind the play area, in front of dark fills)
+    // Tier wallpaper (screen 0 + 2 only)
     drawTierOrnaments(time);
 
-    // Background parallax + sky animations (back to front)
-    drawMountains();
-    drawFarTrees();
+    // Background parallax + sky animations (back to front).  Some only
+    // make sense on the night-forest screen.
+    if (screen === 0) {
+      drawMountains();
+      drawFarTrees();
+    }
     drawClouds();
-    drawBats();
-    drawShootingStars();
+    if (screen === 0) {
+      drawBats();
+      drawShootingStars();
+    }
+
+    // Screen 1 specific: river water
+    if (screen === 1) drawRiver(time);
 
     // Foreground world
     for (const t of TREES) drawTree(t);
@@ -1335,7 +1704,9 @@
     for (const b of BUSHES) drawBush(b);
     for (const r of ROCKS) drawRock(r);
 
-    drawFireflies(time);
+    if (screen === 1) drawBoat(time);
+
+    if (screen === 0) drawFireflies(time);
 
     drawChest();
     drawKey(time);
@@ -1348,8 +1719,16 @@
 
     drawParticles();
 
-    drawGround();
+    if (screen === 0) drawGround();
     drawHP();
+    drawScreenLabel();
+  }
+
+  function drawScreenLabel() {
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS'];
+    const label = labels[screen] || '';
+    const col = COLS - label.length - 2;
+    for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
   }
 
   // ───────────────────────────────────────────────────────────────────────
