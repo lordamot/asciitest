@@ -482,12 +482,19 @@
       dog = {
         x: Math.max(2, player.x - 4),
         y: player.y,
-        vx: 0,
+        vx: 0, vy: 0,
         facing: 1,
         biteCool: 0.6,
         biteFlash: 0,
         mood: 'follow',
         bobPhase: 0,
+        floorIdx: player.floorIdx,
+        climbing: null,
+        targetFloorIdx: -1,
+        targetFloorY: 0,
+        stunned: 0,
+        stunPhase: 0,
+        grounded: false,
       };
     }
 
@@ -608,6 +615,12 @@
           bobPhase: 0,
           floorIdx: SAFE ? SAFE.floorIdx : player.floorIdx,
           onLadder: false,
+          climbing: null,
+          targetFloorIdx: -1,
+          targetFloorY: 0,
+          stunned: 0,
+          stunPhase: 0,
+          grounded: false,
         };
       }
       setTimeout(() => { codeInputMode = false; }, 900);
@@ -2393,51 +2406,143 @@
   // ───────────────────────────────────────────────────────────────────────
   //  DOG COMPANION AI  (follows the player, charges the snowman, bites)
   // ───────────────────────────────────────────────────────────────────────
+  const DOG_WALK = 22;     // cells/sec on flat ground
+  const DOG_CLIMB = 14;
+  const DOG_STUN_DURATION = 10.0;   // seconds
+
   function updateDog(dt) {
     if (!dog) return;
     if (dog.biteCool > 0) dog.biteCool -= dt;
     if (dog.biteFlash > 0) dog.biteFlash -= dt;
     dog.bobPhase += dt * 6;
 
+    // ── Stunned: dog is knocked off, can't move for DOG_STUN_DURATION s
+    // (with a brief falling-arc animation while it settles on a floor).
+    if (dog.stunned > 0) {
+      dog.stunned -= dt;
+      dog.stunPhase = (dog.stunPhase || 0) + dt * 5;
+      // Physics on the dog while it falls back to a floor.
+      if (!dog.grounded) {
+        dog.vy = (dog.vy || 0) + PHYS.gravity * dt;
+        dog.vx = (dog.vx || 0) * 0.92;
+        dog.x += dog.vx * dt;
+        dog.y += dog.vy * dt;
+        // Snap to the first floor whose top we cross while falling.
+        for (let i = 0; i < FLOORS.length; i++) {
+          const f = FLOORS[i];
+          if (f.isBoat) continue;
+          const pcx = dog.x + 2;
+          if (pcx < f.left - 0.5 || pcx > f.right + 0.5) continue;
+          if ((dog.y + 2) >= f.y && dog.vy > 0) {
+            dog.y = f.y - 2;
+            dog.vy = 0; dog.vx = 0;
+            dog.floorIdx = i;
+            dog.grounded = true;
+            break;
+          }
+        }
+        if (dog.y > ROWS) { dog.y = ROWS - 2; dog.vy = 0; dog.grounded = true; }
+      }
+      return;
+    }
+    dog.grounded = false;  // re-enter normal AI; floor tracked by AI now.
+
     // Find a snowman target (any alive snowman).
     const snowman = enemies.find(e => e.type === 'snowman' && e.hp > 0);
-    const wantTarget = snowman || player;
     const mood = (snowman && Math.abs(snowman.y - player.y) < 16) ? 'chase' : 'follow';
     dog.mood = mood;
 
-    if (screen === 4) {
-      // On the snow boss arena the dog walks on platforms — no flying.
-      // It tracks the player's floor and uses a simple X-only chase.
-      dog.floorIdx = player.floorIdx;
-      const f = FLOORS[dog.floorIdx];
-      if (f) dog.y = f.y - 2;
-      let tx;
+    // Pick a desired x for "follow" or "chase" on the dog's current
+    // floor.  When the player is on a different floor the dog instead
+    // routes to a ladder leading toward the player's floor.
+    function pickFollowTx() {
       if (mood === 'chase' && snowman) {
-        // Approach from whichever side puts us between player and snowman.
-        tx = snowman.x + (snowman.x > player.x ? -2 : snowman.w);
-      } else {
-        tx = player.x - 5 * (player.facing || 1);
+        return snowman.x + (snowman.x > player.x ? -2 : snowman.w);
       }
-      const speed = (mood === 'chase' ? 26 : 18);
-      const dxv = tx - dog.x;
-      const step = speed * dt;
-      if (Math.abs(dxv) < step) dog.x = tx;
-      else dog.x += Math.sign(dxv) * step;
-      // Clamp to current platform so the dog never walks off into the void.
-      if (f) dog.x = Math.max(f.left, Math.min(f.right - 4, dog.x));
-      dog.facing = (mood === 'chase')
-        ? (Math.sign(snowman.x - dog.x) || dog.facing)
-        : (Math.sign(player.x - dog.x) || dog.facing);
-      if (dog.facing === 0) dog.facing = 1;
+      return player.x - 5 * (player.facing || 1);
+    }
+
+    // Use ladder-routing AI on screens that have ladders (snow boss arena,
+    // cave when the safe just popped, etc.).  Falls back to a smooth lerp
+    // anywhere that has no ladders to climb (sky, river, space).
+    const hasLadders = LADDERS && LADDERS.length > 0;
+
+    if (hasLadders) {
+      // ── Climb-aware follow (same routing the snowman/tiger use) ─
+      if (dog.climbing) {
+        const dir = dog.climbing === 'up' ? -1 : 1;
+        dog.y += dir * DOG_CLIMB * dt;
+        const targetY = dog.targetFloorY - 2;
+        const reached = (dir < 0 && dog.y <= targetY) || (dir > 0 && dog.y >= targetY);
+        if (reached) {
+          dog.y = targetY;
+          dog.floorIdx = dog.targetFloorIdx;
+          dog.climbing = null;
+        }
+        return;
+      }
+      const f = FLOORS[dog.floorIdx];
+      if (!f) {
+        // Lost — snap to player's floor as a recovery so the dog never
+        // ends up in the void.
+        dog.floorIdx = player.floorIdx;
+      } else {
+        dog.y = f.y - 2;
+        const playerFloor = FLOORS[player.floorIdx];
+        const playerFloorY = playerFloor ? playerFloor.y : f.y;
+        if (playerFloorY !== f.y) {
+          // Find a ladder going one step toward the player's floor.
+          const goUp = playerFloorY < f.y;
+          let best = null, bestDx = Infinity;
+          for (const l of LADDERS) {
+            if (goUp && l.bottom === f.y && l.top < f.y) {
+              const dx = Math.abs(l.x - (dog.x + 2));
+              if (dx < bestDx) { bestDx = dx; best = l; }
+            } else if (!goUp && l.top === f.y && l.bottom > f.y) {
+              const dx = Math.abs(l.x - (dog.x + 2));
+              if (dx < bestDx) { bestDx = dx; best = l; }
+            }
+          }
+          if (best) { dog.targetX = best.x - 2; dog.targetLadder = best; }
+          else      { dog.targetX = player.x;   dog.targetLadder = null; }
+        } else {
+          dog.targetX = pickFollowTx();
+          dog.targetLadder = null;
+        }
+
+        const dxv = (dog.targetX !== undefined ? dog.targetX : player.x) - dog.x;
+        if (Math.abs(dxv) > 0.5) {
+          dog.vx = Math.sign(dxv) * DOG_WALK * (mood === 'chase' ? 1.2 : 1);
+          dog.facing = Math.sign(dxv);
+          dog.x += dog.vx * dt;
+        } else {
+          dog.vx = 0;
+        }
+        dog.x = Math.max(f.left, Math.min(f.right - 4, dog.x));
+
+        // Reached the chosen ladder → start climbing.
+        if (dog.targetLadder) {
+          const centre = dog.x + 2;
+          if (Math.abs(centre - dog.targetLadder.x) < 0.6) {
+            const goUp = dog.targetLadder.top < f.y;
+            dog.climbing = goUp ? 'up' : 'down';
+            dog.x = dog.targetLadder.x - 2;
+            const destY = goUp ? dog.targetLadder.top : dog.targetLadder.bottom;
+            dog.targetFloorY = destY;
+            dog.targetFloorIdx = FLOORS.findIndex(fl => fl.y === destY);
+            dog.targetLadder = null;
+            dog.vx = 0;
+          }
+        }
+      }
     } else {
-      // Anywhere else (e.g., still in the cave when the safe popped):
-      // the dog floats and lerps so it can keep up across odd terrain.
+      // ── Free-floating smooth follow (anywhere with no ladders).
       let tx, ty;
       if (mood === 'chase' && snowman) {
         tx = snowman.x + (snowman.x > player.x ? -2 : snowman.w);
         ty = snowman.y + 2;
       } else {
-        tx = player.x - 5 * (player.facing || 1);
+        tx = pickFollowTx();
         ty = player.y + 1;
       }
       const speed = mood === 'chase' ? 24 : 16;
@@ -2454,7 +2559,9 @@
       if (dog.facing === 0) dog.facing = 1;
     }
 
-    // Bite!  When close to snowman and cooldown is up.
+    // ── Bite!  Close to snowman and cooldown up.  Even successful bites
+    // get countered by the snowman — the dog is kicked off and stunned
+    // for DOG_STUN_DURATION seconds (unless the bite was the killing blow).
     if (snowman && dog.biteCool <= 0) {
       const close =
         Math.abs((dog.x + 2.5) - (snowman.x + snowman.w / 2)) < snowman.w / 2 + 2 &&
@@ -2474,6 +2581,21 @@
           spawnParticles(snowman.x + snowman.w / 2, snowman.y + 2, {
             count: 60, colors: ['#cad8e8','#7fc8ff','#ffffff','#ffd56b'],
             chars: ['❄','*','✦','·','+'],
+          });
+        } else {
+          // Counter-punch — knock the dog away and stun it.
+          dog.stunned = DOG_STUN_DURATION;
+          dog.stunPhase = 0;
+          dog.climbing = null;
+          dog.targetLadder = null;
+          const dir = (dog.x + 2.5) < (snowman.x + snowman.w / 2) ? -1 : 1;
+          dog.vx = dir * 40;
+          dog.vy = -22;
+          dog.grounded = false;
+          blip(120, 0.30, 'sawtooth', 0.07, 60);
+          noiseBurst(0.10, 0.06);
+          spawnParticles(dog.x + 2, dog.y, {
+            count: 18, colors: ['#ff5070','#ffd56b','#ffffff'], chars: ['*','×','!','?'],
           });
         }
       }
@@ -2750,18 +2872,42 @@
     }
   }
 
+  // Knocked-out dog — lying on its side, dizzy stars circling.
+  const DOG_STUN = [
+    ' ╴⌒╴  ',
+    '(✕‿✕) ',
+  ];
+  const DOG_STUN_COLORS = ['#7a4a22', '#caa070'];
+
   function drawDog(time) {
     if (!dog) return;
-    const sprite = dog.facing >= 0 ? DOG_R_5 : DOG_L_5;
     const px = Math.round(dog.x);
     const bob = Math.sin(dog.bobPhase) * 0.2;
     const py = Math.round(dog.y + bob);
-    // Bite flash → red tint briefly
+
+    if (dog.stunned > 0) {
+      // Show "felt off" pose with x-eyes and circling stars.
+      putSpriteColored(px, py, DOG_STUN, DOG_STUN_COLORS);
+      // Three little stars orbiting above the head.
+      const t = (time * 3 + (dog.stunPhase || 0));
+      for (let i = 0; i < 3; i++) {
+        const a = t + i * (Math.PI * 2 / 3);
+        const sx = px + 2 + Math.round(Math.cos(a) * 2);
+        const sy = py - 1 + Math.round(Math.sin(a) * 0.7);
+        putChar(sx, sy, '✦', i % 2 === 0 ? '#ffd56b' : '#ffffff');
+      }
+      // Countdown number above the dog so the player knows how long.
+      const secs = Math.max(0, Math.ceil(dog.stunned));
+      const lbl = String(secs);
+      putString(px + 2 - ((lbl.length - 1) >> 1), py - 2, lbl, '#ff8060');
+      return;
+    }
+
+    const sprite = dog.facing >= 0 ? DOG_R_5 : DOG_L_5;
     const colors = dog.biteFlash > 0
       ? ['#ffd56b', '#ff5070']
       : DOG_COLORS;
     putSpriteColored(px, py, sprite, colors);
-    // Mood/intent indicator
     if (dog.mood === 'chase' && (((time * 6) | 0) % 2) === 0) {
       putChar(px + 2, py - 1, '!', '#ff8060');
     }
@@ -3689,7 +3835,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c6';
+    const v = 'c7';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
