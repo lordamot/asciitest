@@ -1993,6 +1993,64 @@
     });
   }
 
+  // ── Cheat menu (expandable panel under the HUD) ─────────────────
+  let infiniteLives = false;
+  const cheatBtn   = document.getElementById('cheatBtn');
+  const cheatPanel = document.getElementById('cheatPanel');
+  const infLivesBtn = document.getElementById('infLivesBtn');
+  if (cheatBtn && cheatPanel) {
+    cheatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cheatPanel.classList.toggle('hidden');
+      cheatBtn.textContent = cheatPanel.classList.contains('hidden') ? '▾' : '▴';
+    });
+  }
+  // Level-jump buttons
+  document.querySelectorAll('.cheat-lv').forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ensureAudio();
+      const target = parseInt(b.dataset.lv, 10);
+      cheatJumpToLevel(target);
+      // Mark active button briefly
+      document.querySelectorAll('.cheat-lv.active').forEach(o => o.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+  if (infLivesBtn) {
+    infLivesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      infiniteLives = !infiniteLives;
+      infLivesBtn.textContent = infiniteLives ? 'ON' : 'OFF';
+      if (infiniteLives) infLivesBtn.classList.add('active');
+      else infLivesBtn.classList.remove('active');
+      // Top up the player's lives the moment infinite gets enabled.
+      if (infiniteLives) player.lives = player.maxLives;
+    });
+  }
+  function cheatJumpToLevel(n) {
+    if (n < 0 || n >= NUM_SCREENS) return;
+    // Reset transient state so the new level feels clean.
+    player.hp = player.maxHp;
+    player.invul = 0;
+    player.attack = 0;
+    player.attackCool = 0;
+    player.hurtFlash = 0;
+    player.dead = false;
+    particles.length = 0;
+    PROJECTILES.length = 0;
+    SHOOTING_STARS.length = 0;
+    BATS.length = 0;
+    BIRDS.length = 0;
+    TREE_LEAVES.length = 0;
+    SNOWFLAKES.length = 0;
+    DROPS.length = 0;
+    // Hide any open overlay (menu / game-over / won) so play resumes.
+    overlay.classList.add('hidden');
+    gameState = 'playing';
+    loadScreen(n);
+  }
+
   // Overlay
   const overlay = document.getElementById('overlay');
   const overlayText = document.getElementById('overlayText');
@@ -2538,9 +2596,9 @@
     if (player.hp <= 0 && !player.dead) {
       player.dead = true;
       spawnParticles(player.x + 1, player.y + 1.5, { count: 30, colors: ['#ff6464','#ff9a3a','#ffd56b'] });
-      if (player.lives > 0) {
+      if (player.lives > 0 || infiniteLives) {
         // Continue — respawn on this same screen after a short pause.
-        player.lives -= 1;
+        if (!infiniteLives) player.lives -= 1;
         blip(300, 0.18, 'sawtooth', 0.05, 140);
         setTimeout(() => respawnPlayer(), 850);
       } else {
@@ -4021,9 +4079,13 @@
     // Spare lives — small figure icons just after the hearts.
     const baseCol = 2 + player.maxHp * 2;
     putString(baseCol, 0, 'x', '#9aa6b8');
-    for (let i = 0; i < player.maxLives; i++) {
-      const filled = i < player.lives;
-      putChar(baseCol + 2 + i * 2, 0, filled ? '☺' : '·', filled ? '#7fc8ff' : '#3a4256');
+    if (infiniteLives) {
+      putChar(baseCol + 2, 0, '∞', '#7fc8ff');
+    } else {
+      for (let i = 0; i < player.maxLives; i++) {
+        const filled = i < player.lives;
+        putChar(baseCol + 2 + i * 2, 0, filled ? '☺' : '·', filled ? '#7fc8ff' : '#3a4256');
+      }
     }
   }
 
@@ -4611,7 +4673,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'd0';
+    const v = 'd1';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 

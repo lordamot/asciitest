@@ -45,8 +45,51 @@ html, body {
   padding: 1px 5px;
   font-size: 11px;
 }
-#sndBtn, #musBtn { cursor: pointer; }
-#sndBtn:hover, #musBtn:hover { color: #ffd56b; border-color: #5a4a14; }
+#sndBtn, #musBtn, #cheatBtn { cursor: pointer; }
+#sndBtn:hover, #musBtn:hover, #cheatBtn:hover { color: #ffd56b; border-color: #5a4a14; }
+
+/* Expandable cheat panel that drops below the HUD. */
+.cheat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 8px 8px;
+  background: rgba(15, 18, 30, 0.92);
+  border-top: 1px solid #28304a;
+  border-bottom: 1px solid #28304a;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: #c8ccd4;
+}
+.cheat-panel.hidden { display: none; }
+.cheat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.cheat-label {
+  color: #ffd56b;
+  letter-spacing: 0.15em;
+  min-width: 110px;
+}
+.cheat-btn {
+  background: #131826;
+  color: #d8e3f0;
+  border: 1px solid #28304a;
+  border-radius: 3px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.cheat-btn:hover { color: #ffd56b; border-color: #5a4a14; }
+.cheat-btn.active {
+  color: #ffd56b;
+  border-color: #5a4a14;
+  background: #1f2238;
+}
 
 #game {
   display: block;

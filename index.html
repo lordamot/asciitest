@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>ASCII QUEST — The Golden Key</title>
-  <link rel="stylesheet" href="style.css?v=20" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
   <div id="frame">
@@ -26,6 +26,27 @@
       <span class="hud-label">SOUND</span> <span class="hud-key" id="sndBtn">ON</span>
       <span class="hud-sep">|</span>
       <span class="hud-label">MUSIC</span> <span class="hud-key" id="musBtn">ON</span>
+      <span class="hud-sep">|</span>
+      <span class="hud-label">CHEAT</span> <span class="hud-key" id="cheatBtn">▾</span>
+    </div>
+    <div id="cheatPanel" class="cheat-panel hidden">
+      <div class="cheat-row">
+        <span class="cheat-label">LEVEL</span>
+        <button class="cheat-btn cheat-lv" data-lv="0">1 FOREST</button>
+        <button class="cheat-btn cheat-lv" data-lv="1">2 RIVER</button>
+        <button class="cheat-btn cheat-lv" data-lv="2">3 SKY</button>
+        <button class="cheat-btn cheat-lv" data-lv="3">4 CAVE</button>
+        <button class="cheat-btn cheat-lv" data-lv="4">5 SNOW</button>
+        <button class="cheat-btn cheat-lv" data-lv="5">6 SPACE</button>
+        <button class="cheat-btn cheat-lv" data-lv="6">7 JUNGLE</button>
+        <button class="cheat-btn cheat-lv" data-lv="7">8 VOLCANO</button>
+        <button class="cheat-btn cheat-lv" data-lv="8">9 HEAVEN</button>
+        <button class="cheat-btn cheat-lv" data-lv="9">10 MATRIX</button>
+      </div>
+      <div class="cheat-row">
+        <span class="cheat-label">INFINITE LIVES</span>
+        <button class="cheat-btn" id="infLivesBtn">OFF</button>
+      </div>
     </div>
     <canvas id="game" width="1500" height="918"></canvas>
     <div id="overlay">
@@ -33,6 +54,6 @@
       <div id="overlaySub">Grab the golden key at the top!</div>
     </div>
   </div>
-  <script src="game.js?v=20"></script>
+  <script src="game.js?v=21"></script>
 </body>
 </html>
