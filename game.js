@@ -91,12 +91,15 @@
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
   let GOAL = null;      // win-or-advance objective for the current screen
   let screen = 0;
-  const NUM_SCREENS = 9;
+  const NUM_SCREENS = 10;
   // Per-screen physics overrides (only space tweaks gravity for now).
   const PHYS_OVERRIDES = { 5: { gravityMul: 0.45, jumpVMul: 0.85 } };
   // Space-level mechanics
   let TELEPORTS = [];      // [{x, y, floorIdx, idx}]
   let BLACKHOLE = null;    // { x, y, w, h }
+  // Matrix level
+  let GLITCH_ITEMS = [];   // [{kind, x, floorIdx, glitch}]
+  let RAIN_COLS = [];      // [{x, head, speed, phase}]
   let teleCooldown = 0;    // seconds; prevents instant re-teleport on landing
 
   // Dog companion (granted at start of level 5 if the cave safe was
@@ -141,6 +144,8 @@
     BLACKHOLE = null;
     teleCooldown = 0;
     PROJECTILES.length = 0;
+    GLITCH_ITEMS = [];
+    RAIN_COLS = [];
     KEY = null;
     CHEST = null;
     POTION = null;
@@ -528,6 +533,51 @@
       ROCKS = [];
       POTION = { x: 50, floorIdx: 6, collected: false };
       GOAL = 'defeat-angels';
+
+    } else if (n === 9) {
+      // ───── Screen 9: Matrix — final showdown.
+      setFloors([
+        { y: 12, left: 2,  right: 196, theme: 'matrix' },
+        { y: 28, left: 2,  right: 196, theme: 'matrix' },
+        { y: 44, left: 2,  right: 196, theme: 'matrix' },
+        { y: 60, left: 2,  right: 196, theme: 'matrix' },
+      ]);
+      LADDERS = [
+        { x: 48,  top: 12, bottom: 28 },
+        { x: 152, top: 12, bottom: 28 },
+        { x: 30,  top: 28, bottom: 44 },
+        { x: 112, top: 28, bottom: 44 },
+        { x: 174, top: 28, bottom: 44 },
+        { x: 64,  top: 44, bottom: 60 },
+        { x: 138, top: 44, bottom: 60 },
+        { x: 186, top: 44, bottom: 60 },
+      ];
+      // Glitch decorations: TVs + a small chair/lamp scatter.
+      GLITCH_ITEMS = [
+        { kind: 'tv',    x: 30,  floorIdx: 3, glitch: 0 },
+        { kind: 'tv',    x: 170, floorIdx: 3, glitch: 0 },
+        { kind: 'chair', x: 90,  floorIdx: 3, glitch: 0 },
+        { kind: 'tv',    x: 60,  floorIdx: 2, glitch: 0 },
+        { kind: 'chair', x: 130, floorIdx: 2, glitch: 0 },
+        { kind: 'lamp',  x: 22,  floorIdx: 1, glitch: 0 },
+        { kind: 'tv',    x: 150, floorIdx: 1, glitch: 0 },
+        { kind: 'lamp',  x: 100, floorIdx: 0, glitch: 0 },
+      ];
+      // Code-rain columns — one every 2 cells.
+      RAIN_COLS = [];
+      for (let cx = 0; cx < COLS; cx += 2) {
+        RAIN_COLS.push({
+          x: cx,
+          head: Math.random() * ROWS,
+          speed: 10 + Math.random() * 22,
+          phase: Math.random() * 999,
+        });
+      }
+      TREES = [];
+      BUSHES = [];
+      ROCKS = [];
+      POTION = { x: 90, floorIdx: 3, collected: false };
+      GOAL = 'defeat-agents';
     }
 
     // Player starting position (shared with respawnPlayer())
@@ -907,6 +957,57 @@
           x: 58, y: 50, phase: Math.PI, pSpeed: 0.9, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 2 },
       ];
+    } else if (n === 9) {
+      // Matrix — 3 agents + weak minions.
+      enemies = [
+        // Three agents on different floors.
+        { type: 'agent',
+          x: 60, y: FLOORS[2].y - 4,
+          vx: 0, facing: -1,
+          hp: 5, maxHp: 5, hurt: 0, dead: 0,
+          w: 5, h: 4,
+          floorIdx: 2, floorY: FLOORS[2].y,
+          climbing: null, targetFloorIdx: -1, targetFloorY: 0,
+          walk: 0, repath: 0,
+          teleportCool: 14 + Math.random() * 10,
+          teleportState: 'idle',
+          teleportTimer: 0,
+        },
+        { type: 'agent',
+          x: 140, y: FLOORS[1].y - 4,
+          vx: 0, facing: 1,
+          hp: 5, maxHp: 5, hurt: 0, dead: 0,
+          w: 5, h: 4,
+          floorIdx: 1, floorY: FLOORS[1].y,
+          climbing: null, targetFloorIdx: -1, targetFloorY: 0,
+          walk: 0, repath: 0,
+          teleportCool: 22 + Math.random() * 10,
+          teleportState: 'idle',
+          teleportTimer: 0,
+        },
+        { type: 'agent',
+          x: 100, y: FLOORS[0].y - 4,
+          vx: 0, facing: -1,
+          hp: 5, maxHp: 5, hurt: 0, dead: 0,
+          w: 5, h: 4,
+          floorIdx: 0, floorY: FLOORS[0].y,
+          climbing: null, targetFloorIdx: -1, targetFloorY: 0,
+          walk: 0, repath: 0,
+          teleportCool: 32 + Math.random() * 10,
+          teleportState: 'idle',
+          teleportTimer: 0,
+        },
+        // Weak "sentinel" minions — reuse ghost float with green palette.
+        { type: 'sentinel', cx: 80,  cy: 36, rx: 28, ry: 4,
+          x: 78, y: 36, phase: 0, pSpeed: 1.2, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 2 },
+        { type: 'sentinel', cx: 130, cy: 20, rx: 30, ry: 4,
+          x: 128, y: 20, phase: Math.PI, pSpeed: 1.0, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 2 },
+        { type: 'sentinel', cx: 60,  cy: 52, rx: 30, ry: 3,
+          x: 58, y: 52, phase: Math.PI / 2, pSpeed: 1.4, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 2 },
+      ];
     } else {
       enemies = [];
     }
@@ -988,6 +1089,7 @@
     6: '#ff6a3a',   // jungle: vivid parrots
     7: '#ff8a30',   // volcano: ember-bright cinderbirds
     8: '#ffe888',   // heaven: golden doves
+    9: '#60ff60',   // matrix: glitchy code-birds
   };
   const BIRD_FRAMES = ['/V\\', '_v_'];
   // Drifting leaves shed from trees.  Per-tree rate is tied to wind phase.
@@ -1262,6 +1364,26 @@
   const CHERUB_A = [' ◯ ', 'ʕoʔ'];
   const CHERUB_B = [' ◯ ', 'ʕoʔ'];
   const CHERUB_COLORS = ['#ffe888', '#ffd56b'];
+
+  // Matrix agent — 5×4 sharp suit silhouette.
+  const AGENT_A = [
+    ' ▄▄▄ ',
+    '(▬█▬)',
+    ' ▓▓▓ ',
+    ' ╱ ╲ ',
+  ];
+  const AGENT_B = [
+    ' ▄▄▄ ',
+    '(▬█▬)',
+    ' ▓▓▓ ',
+    ' ╲ ╱ ',
+  ];
+  const AGENT_COLORS = ['#222a22', '#101410', '#1a2418', '#0a0e0a'];
+
+  // Sentinel minion — small mechanical scout.
+  const SENTINEL_A = [' ◓◒', '╳▒╳'];
+  const SENTINEL_B = [' ◒◓', '╳▒╳'];
+  const SENTINEL_COLORS = ['#60ff60', '#207020'];
 
   // Projectiles fired by the demon (and any future ranged enemy).
   const PROJECTILES = [];
@@ -1755,6 +1877,9 @@
     // Heavens — slow choral major triads with airy bass.
     8: { tempo: 72,  notes: ['C5','E5','G5','C5','D5','F5','A5','D5','E5','G5','B5','E5','D5','F5','A5','D5'],
                      bass:  ['C3','C3','D3','D3','E3','E3','D3','D3'] },
+    // Matrix — tense modal loop with rests for digital feel.
+    9: { tempo: 128, notes: ['E3','REST','G3','B3','E4','REST','D4','B3','C4','REST','E3','G3','B3','REST','A3','G3'],
+                     bass:  ['E2','E2','E2','E2','A2','A2','D3','D3'] },
   };
   let musicTrack = null;
   let musicStep = 0, musicBassStep = 0;
@@ -1889,8 +2014,9 @@
     if (n === 5) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 6) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
     if (n === 7) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
-    // n === 8 (heaven): the player drops in on the bottom runway.
-    return            { x: 12, y: FLOORS[6].y - 3, floorIdx: 6 };
+    if (n === 8) return { x: 12, y: FLOORS[6].y - 3, floorIdx: 6 };
+    // n === 9 (matrix): bottom floor.
+    return            { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
   }
 
   function respawnPlayer() {
@@ -1966,6 +2092,8 @@
     updateProjectiles(dt);
     updateDog(dt);
     updateSnowflakes(dt);
+    updateRain(dt);
+    updateGlitches(dt);
 
     if (gameState !== 'playing') {
       updateParticles(dt);
@@ -2186,17 +2314,26 @@
     if (GOAL === 'defeat-angels' && gameState === 'playing') {
       const alive = enemies.some(e => e.type === 'angel' && e.hp > 0);
       if (!alive) {
-        // Both angels defeated — real final win.
+        // Angels down — descend into the Matrix.
+        GOAL = 'transit';
+        setTimeout(winSound, 200);
+        setTimeout(() => advanceScreen(), 900);
+      }
+    }
+    if (GOAL === 'defeat-agents' && gameState === 'playing') {
+      const alive = enemies.some(e => e.type === 'agent' && e.hp > 0);
+      if (!alive) {
+        // All three agents down — game complete.
         GOAL = 'won';
         setTimeout(winSound, 200);
         setTimeout(() => {
           gameState = 'won';
           if (safeOpened) {
             overlayText.textContent = 'PERFECT VICTORY! ★';
-            overlaySub.textContent = 'You ascended past the angels — click to play again';
+            overlaySub.textContent = 'You broke free of the Matrix — click to play again';
           } else {
             overlayText.textContent = 'YOU WIN!';
-            overlaySub.textContent = 'The angels are vanquished — click to play again';
+            overlaySub.textContent = 'The agents fall — click to play again';
           }
           overlay.classList.remove('hidden');
         }, 900);
@@ -2470,12 +2607,14 @@
         updateDemonShooting(e, dt);
       } else if (e.type === 'angel') {
         updateAngel(e, dt);
-      } else if (e.type === 'cherub') {
+      } else if (e.type === 'cherub' || e.type === 'sentinel') {
         // Same float behaviour as a ghost.
         e.phase += dt * e.pSpeed;
         e.x = e.cx + Math.cos(e.phase) * e.rx - 1;
         e.y = e.cy + Math.sin(e.phase * 1.4) * e.ry;
         e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
+      } else if (e.type === 'agent') {
+        updateAgent(e, dt);
       }
     }
     // Cull dead enemies whose fade-out finished.
@@ -2517,6 +2656,85 @@
   const ANGEL_WALK = 19.2;     // 80% of player walk (24)
   const ANGEL_FLY = 24;
   const ANGEL_FLIGHT_COOLDOWN = 3.0;   // grace window for the player to escape
+
+  // Matrix agent — 90% of player walk, climbs ladders, teleports.
+  const AGENT_WALK = 21.6;
+  const AGENT_CLIMB = 16;
+  const AGENT_TELEPORT_COOLDOWN = 40.0;
+  const AGENT_FADE_TIME = 2.4;
+  const AGENT_ASSEMBLE_TIME = 2.4;
+
+  function updateAgent(a, dt) {
+    a.teleportCool = (a.teleportCool ?? AGENT_TELEPORT_COOLDOWN) - dt;
+    if (a.teleportState === 'wind-up') {
+      a.teleportTimer -= dt;
+      if (a.teleportTimer <= 0) {
+        a.teleportState = 'fading';
+        a.teleportTimer = AGENT_FADE_TIME;
+        blip(180, 0.20, 'sawtooth', 0.06, 60);
+      }
+      return;
+    }
+    if (a.teleportState === 'fading') {
+      a.teleportTimer -= dt;
+      // Trail of glitch particles while fading.
+      if ((Math.random() < dt * 12)) {
+        spawnParticles(a.x + a.w / 2, a.y + a.h / 2, {
+          count: 1,
+          colors: ['#60ff60','#a0ffa0','#ffffff','#0a3010'],
+          chars: ['1','0','▓','░','▒'],
+        });
+      }
+      if (a.teleportTimer <= 0) {
+        // Teleport to a point 3-4 cells from the player.
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        const offset = 3 + Math.random() * 2;
+        let tx = player.x + dir * offset;
+        const pf = FLOORS[player.floorIdx];
+        if (pf) {
+          tx = Math.max(pf.left, Math.min(pf.right - a.w, tx));
+          a.x = tx;
+          a.y = pf.y - a.h;
+          a.floorIdx = player.floorIdx;
+          a.floorY = pf.y;
+        }
+        a.teleportState = 'assembling';
+        a.teleportTimer = AGENT_ASSEMBLE_TIME;
+        spawnParticles(a.x + a.w / 2, a.y + a.h / 2, {
+          count: 40,
+          colors: ['#60ff60','#a0ffa0','#ffffff'],
+          chars: ['*','+','░','▒','1','0'],
+        });
+        blip(720, 0.15, 'square', 0.06, 220);
+      }
+      return;
+    }
+    if (a.teleportState === 'assembling') {
+      a.teleportTimer -= dt;
+      // Sparkles popping in around the agent.
+      if (Math.random() < dt * 14) {
+        const ox = (Math.random() - 0.5) * 6;
+        const oy = (Math.random() - 0.5) * 4;
+        spawnParticles(a.x + a.w / 2 + ox, a.y + a.h / 2 + oy, {
+          count: 1,
+          colors: ['#60ff60','#a0ffa0','#ffffff'],
+          chars: ['*','·','+','1','0'],
+        });
+      }
+      if (a.teleportTimer <= 0) {
+        a.teleportState = 'idle';
+        a.teleportCool = AGENT_TELEPORT_COOLDOWN;
+      }
+      return;
+    }
+    // Idle: ladder-routed chase, then check whether to teleport.
+    updateSnowman(a, dt);
+    if (a.teleportCool <= 0 && !a.climbing) {
+      a.teleportState = 'wind-up';
+      a.teleportTimer = 0.8;
+      blip(240, 0.10, 'square', 0.04);
+    }
+  }
 
   function updateAngel(a, dt) {
     if (a.flightCool > 0) a.flightCool -= dt;
@@ -2650,9 +2868,13 @@
   }
 
   function updateSnowman(s, dt) {
-    // Tigers reuse this routine with their own speeds.
-    const WALK_SPEED  = s.type === 'tiger' ? TIGER_WALK  : SNOWMAN_WALK;
-    const CLIMB_SPEED = s.type === 'tiger' ? TIGER_CLIMB : SNOWMAN_CLIMB;
+    // Tigers + Agents reuse this routine with their own speeds.
+    const WALK_SPEED  = s.type === 'tiger' ? TIGER_WALK
+                       : s.type === 'agent' ? AGENT_WALK
+                       : SNOWMAN_WALK;
+    const CLIMB_SPEED = s.type === 'tiger' ? TIGER_CLIMB
+                       : s.type === 'agent' ? AGENT_CLIMB
+                       : SNOWMAN_CLIMB;
     // While climbing, just move vertically.
     if (s.climbing) {
       const dir = s.climbing === 'up' ? -1 : 1;
@@ -2950,6 +3172,7 @@
       const hw = 6, hh = 6;
       for (const e of enemies) {
         if (e.hp <= 0 || e.hurt > 0) continue;
+        if (e.type === 'agent' && e.teleportState && e.teleportState !== 'idle') continue;
         if (rectOverlap(hx, hy, hw, hh, e.x, e.y, e.w, e.h)) {
           e.hp -= 1;
           e.hurt = 0.25;
@@ -2977,6 +3200,7 @@
       const px = player.x, py = player.y;
       for (const e of enemies) {
         if (e.hp <= 0) continue;
+        if (e.type === 'agent' && e.teleportState && e.teleportState !== 'idle') continue;
         if (rectOverlap(px, py, 3, 3, e.x, e.y, e.w, e.h)) {
           player.hp -= 1;
           player.invul = PLAYER_INVUL;
@@ -3243,6 +3467,12 @@
         const a2 = 0.4 + 0.4 * Math.sin(time * 2 + i);
         putChar(ex, ey | 0, i % 2 === 0 ? '✦' : '·', `rgba(255,240,150,${a2.toFixed(2)})`);
       }
+
+    } else if (screen === 9) {
+      // ── Matrix: pure black backdrop, the code rain handles all the
+      // ambient colour (drawRain runs from drawScreenParallax / draw).
+      ctx.fillStyle = '#020602';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
   }
 
@@ -3263,6 +3493,84 @@
       else if (f.x > COLS) f.x = 0;
     }
   }
+  // ── Matrix code-rain ────────────────────────────────────────────
+  const RAIN_GLYPHS = '01ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ▒▓░';
+  function updateRain(dt) {
+    if (screen !== 9 || RAIN_COLS.length === 0) return;
+    for (const c of RAIN_COLS) {
+      c.head += c.speed * dt;
+      c.phase += dt * 8;
+      if (c.head > ROWS + 14) {
+        c.head = -Math.random() * 14;
+        c.speed = 10 + Math.random() * 22;
+      }
+    }
+  }
+  function drawRain(time) {
+    if (screen !== 9 || RAIN_COLS.length === 0) return;
+    const len = RAIN_GLYPHS.length;
+    for (const c of RAIN_COLS) {
+      for (let i = 0; i < 14; i++) {
+        const y = Math.floor(c.head - i);
+        if (y < 0 || y >= ROWS) continue;
+        const k = ((c.phase + c.x * 7 + y * 3) | 0) % len;
+        const ch = RAIN_GLYPHS[Math.abs(k)];
+        let col;
+        if (i === 0)      col = 'rgba(220,255,200,0.95)';
+        else if (i < 3)   col = `rgba(120,255,120,${(0.8 - i * 0.15).toFixed(2)})`;
+        else if (i < 8)   col = `rgba(40,200,60,${(0.6 - i * 0.06).toFixed(2)})`;
+        else              col = `rgba(20,120,40,${(0.4 - i * 0.04).toFixed(2)})`;
+        putChar(c.x, y, ch, col);
+      }
+    }
+  }
+
+  // ── Glitchy decorations (TVs / lamps / chairs) ──────────────────
+  const TV_BODY = ['┌───┐', '│░▒░│', '└─┬─┘'];
+  const TV_LEGS = '╱   ╲';
+  const TV_GLITCH = ['┘├─┐', '│#@%│', '╲┘─┌'];   // sometimes substituted for body rows
+  const CHAIR = [' ╔═╗', ' ║ ║', ' ╨ ╨'];
+  const LAMP  = ['  ▓', '  ║', ' ═╧'];
+  function updateGlitches(dt) {
+    for (const g of GLITCH_ITEMS) {
+      g.glitch -= dt;
+      if (g.glitch <= 0) {
+        // Roughly every 3–8 seconds, glitch out briefly.
+        if (Math.random() < dt * 0.6) g.glitch = 0.4 + Math.random() * 0.4;
+        else g.glitch = 0;
+      }
+    }
+  }
+  function drawGlitches(time) {
+    for (const g of GLITCH_ITEMS) {
+      const f = FLOORS[g.floorIdx];
+      if (!f) continue;
+      const yTop = f.y - 3;
+      const isGlitching = g.glitch > 0;
+      let sprite;
+      if (g.kind === 'tv') {
+        sprite = isGlitching && Math.random() < 0.7 ? TV_GLITCH : TV_BODY;
+      } else if (g.kind === 'chair') {
+        sprite = CHAIR;
+      } else {
+        sprite = LAMP;
+      }
+      const shake = isGlitching ? Math.round((Math.random() - 0.5) * 2) : 0;
+      const flicker = isGlitching && (((time * 30) | 0) % 2) === 0;
+      for (let r = 0; r < sprite.length; r++) {
+        const line = sprite[r];
+        const col = flicker
+          ? (Math.random() < 0.4 ? '#ff60a0' : '#80ff80')
+          : (g.kind === 'tv' ? (r === 1 ? '#a0ffa0' : '#406040') : '#80c080');
+        putString(g.x - 2 + shake, yTop + r, line, col);
+      }
+      if (g.kind === 'tv') {
+        // Two short legs below the TV
+        putString(g.x - 2 + shake, yTop + 3, TV_LEGS, '#406040');
+      }
+    }
+  }
+
   function drawSnowflakes() {
     if (screen !== 4) return;
     for (const f of SNOWFLAKES) {
@@ -3453,6 +3761,9 @@
       // Heaven — faraway pearl cloud ridges + a closer pillar treeline.
       drawMountains(8, 10, 0.04, 'rgba(255,255,255,0.55)', 'rgba(220,235,255,0.40)');
       drawFarTreesAt(15, 0.10, 'rgba(255,235,180,0.40)');
+    } else if (screen === 9) {
+      // Matrix — the parallax IS the code rain.
+      drawRain(time);
     }
   }
 
@@ -3621,6 +3932,25 @@
       const a = (((time * 5) | 0) % 2) === 0;
       sprite = a ? CHERUB_A : CHERUB_B;
       colors = CHERUB_COLORS;
+    } else if (e.type === 'sentinel') {
+      const a = (((time * 5) | 0) % 2) === 0;
+      sprite = a ? SENTINEL_A : SENTINEL_B;
+      colors = SENTINEL_COLORS;
+    } else if (e.type === 'agent') {
+      const a = ((e.walk | 0) % 2) === 0;
+      sprite = a ? AGENT_A : AGENT_B;
+      colors = AGENT_COLORS;
+      // Mid-teleport: fade out / assemble in.
+      if (e.teleportState === 'fading') {
+        const fadeA = (e.teleportTimer / AGENT_FADE_TIME);
+        ctx.globalAlpha = Math.max(0, fadeA);
+      } else if (e.teleportState === 'assembling') {
+        const asmA = 1 - (e.teleportTimer / AGENT_ASSEMBLE_TIME);
+        ctx.globalAlpha = Math.max(0, asmA);
+      } else if (e.teleportState === 'wind-up') {
+        // Flickering warning
+        if ((((time * 12) | 0) % 2) === 0) ctx.globalAlpha = 0.4;
+      }
     }
     // Dead enemies fade and shake (until culled)
     if (e.hp <= 0) {
@@ -3716,6 +4046,7 @@
       else if (theme === 'snow')   { topColor = '#ffffff'; shadowColor = '#6d8aad'; capColor = '#9fb4cd'; }
       else if (theme === 'space')  { topColor = '#a8b6e0'; shadowColor = '#3a3858'; capColor = '#6a78a8'; }
       else if (theme === 'lava')   { topColor = '#3a1a10'; shadowColor = '#180806'; capColor = '#5a1a08'; }
+      else if (theme === 'matrix') { topColor = '#60ff60'; shadowColor = '#0a3010'; capColor = '#207040'; }
       else                          { topColor = '#caa070'; shadowColor = '#704830'; capColor = '#7a5a32'; }
       // Platform top
       for (let x = left; x <= right; x++) {
@@ -3732,6 +4063,8 @@
           grain = ((x * 7 + i * 31) % 13) === 0 ? '╳' : ((x + i) % 3 === 0 ? '▰' : '━');
         } else if (theme === 'lava') {
           grain = ((x * 7 + i * 31) % 11) === 0 ? '╳' : ((x + i) % 3 === 0 ? '▓' : '━');
+        } else if (theme === 'matrix') {
+          grain = ((x * 7 + i * 31) % 7) === 0 ? '═' : '━';
         } else {
           grain = ((x * 7 + i * 31) % 13) === 0 ? '═' : '━';
         }
@@ -3752,6 +4085,8 @@
           ch = ((x + i) % 5 === 0) ? '▒' : ((x + i) % 5 === 2 ? '░' : ' ');
         } else if (theme === 'lava') {
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
+        } else if (theme === 'matrix') {
+          ch = ((x + i) % 4 === 0) ? '░' : ' ';
         } else {
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
         }
@@ -4208,6 +4543,7 @@
 
     // Cave decor (stalactites etc.) sits behind floors but in front of bg
     if (screen === 3) drawCaveDecor(time);
+    if (screen === 9) drawGlitches(time);
 
     // Foreground world
     for (const t of TREES) drawTree(t);
@@ -4270,12 +4606,12 @@
   }
 
   function drawScreenLabel() {
-    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE', 'LV.7  JUNGLE', 'LV.8  VOLCANO LAIR', 'LV.9  HEAVENS'];
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE', 'LV.7  JUNGLE', 'LV.8  VOLCANO LAIR', 'LV.9  HEAVENS', 'LV.10 THE MATRIX'];
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c9';
+    const v = 'd0';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
