@@ -46,11 +46,14 @@
     const cp = document.getElementById('cheatPanel');
     if (cp && hudEl) cp.style.top = (hudEl.offsetTop + hudEl.offsetHeight) + 'px';
     const ov = document.getElementById('overlay');
-    if (ov && canvas) {
-      ov.style.top    = canvas.offsetTop    + 'px';
-      ov.style.left   = canvas.offsetLeft   + 'px';
-      ov.style.width  = canvas.offsetWidth  + 'px';
-      ov.style.height = canvas.offsetHeight + 'px';
+    const frame = document.getElementById('frame');
+    if (ov && frame) {
+      // Cover the entire frame, including the HUD bar, so the start /
+      // game-over / win screen sits in front of the main menu.
+      ov.style.top    = '0px';
+      ov.style.left   = '0px';
+      ov.style.width  = frame.clientWidth  + 'px';
+      ov.style.height = frame.clientHeight + 'px';
       ov.style.right  = 'auto';
       ov.style.bottom = 'auto';
     }
@@ -4768,7 +4771,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'd3';
+    const v = 'd4';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
