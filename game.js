@@ -91,7 +91,13 @@
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
   let GOAL = null;      // win-or-advance objective for the current screen
   let screen = 0;
-  const NUM_SCREENS = 5;
+  const NUM_SCREENS = 6;
+  // Per-screen physics overrides (only space tweaks gravity for now).
+  const PHYS_OVERRIDES = { 5: { gravityMul: 0.45, jumpVMul: 0.85 } };
+  // Space-level mechanics
+  let TELEPORTS = [];      // [{x, y, floorIdx, idx}]
+  let BLACKHOLE = null;    // { x, y, w, h }
+  let teleCooldown = 0;    // seconds; prevents instant re-teleport on landing
 
   // Dog companion (granted at start of level 5 if the cave safe was
   // cracked).  Floats / hops alongside the player and chases the
@@ -131,6 +137,9 @@
     BOMB_BUTTONS = [];
     SPAWN_BUTTONS = [];
     ROPE = null;
+    TELEPORTS = [];
+    BLACKHOLE = null;
+    teleCooldown = 0;
     KEY = null;
     CHEST = null;
     POTION = null;
@@ -370,6 +379,39 @@
       GOAL = 'defeat-snowman';
       // Dog created below after player position is finalised.
       dog = null;
+
+    } else if (n === 5) {
+      // ───── Screen 5: Space — floating platforms, low gravity, teleports
+      // and a black hole at the top-right that ends the game.
+      setFloors([
+        { y: 60, left: 2,   right: 56,  theme: 'space' },   // 0 start (bottom-left)
+        { y: 50, left: 70,  right: 100, theme: 'space' },   // 1 mid-low
+        { y: 50, left: 130, right: 160, theme: 'space' },   // 2 mid-low right
+        { y: 38, left: 30,  right: 60,  theme: 'space' },   // 3 mid
+        { y: 38, left: 100, right: 130, theme: 'space' },   // 4 mid right
+        { y: 28, left: 60,  right: 90,  theme: 'space' },   // 5 upper centre
+        { y: 28, left: 140, right: 170, theme: 'space' },   // 6 upper right
+        { y: 18, left: 10,  right: 40,  theme: 'space' },   // 7 upper left
+        { y: 12, left: 150, right: 196, theme: 'space' },   // 8 top right (black hole platform)
+      ]);
+      LADDERS = [];
+      TREES = [];
+      BUSHES = [];
+      ROCKS = [];
+      // Random teleporters scattered on platforms — stepping on one
+      // sends you to a different teleporter.
+      TELEPORTS = [
+        { x: 30,  y: 60, floorIdx: 0 },
+        { x: 85,  y: 50, floorIdx: 1 },
+        { x: 145, y: 50, floorIdx: 2 },
+        { x: 45,  y: 38, floorIdx: 3 },
+        { x: 115, y: 38, floorIdx: 4 },
+        { x: 75,  y: 28, floorIdx: 5 },
+        { x: 25,  y: 18, floorIdx: 7 },
+      ];
+      // Black hole zone at the top-right corner (8 wide × 8 tall).
+      BLACKHOLE = { x: 168, y: 2, w: 14, h: 10 };
+      GOAL = 'reach-blackhole';
     }
 
     // Player starting position (shared with respawnPlayer())
@@ -628,6 +670,23 @@
         { type: 'ghost', cx: 100, cy: 36, rx: 40, ry: 8,
           x: 98, y: 36, phase: 0, pSpeed: 1.0, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+      ];
+    } else if (n === 5) {
+      // Space — UFO drones and a fast alien blob.
+      enemies = [
+        { type: 'ufo', cx: 70,  cy: 25, rx: 32, ry: 6,
+          x: 68, y: 25, phase: 0, pSpeed: 1.6, hp: 2, maxHp: 2,
+          facing: 1, hurt: 0, dead: 0, w: 5, h: 2 },
+        { type: 'ufo', cx: 130, cy: 22, rx: 22, ry: 5,
+          x: 128, y: 22, phase: Math.PI, pSpeed: 1.4, hp: 2, maxHp: 2,
+          facing: 1, hurt: 0, dead: 0, w: 5, h: 2 },
+        { type: 'ufo', cx: 110, cy: 14, rx: 28, ry: 4,
+          x: 108, y: 14, phase: Math.PI / 2, pSpeed: 1.9, hp: 2, maxHp: 2,
+          facing: 1, hurt: 0, dead: 0, w: 5, h: 2 },
+        // Alien blob (slime sprite, faster, more HP)
+        { type: 'slime', x: 80, y: FLOORS[1].y - 2, vx: 11, facing: 1, hp: 2, maxHp: 2,
+          floorIdx: 1, minX: 70, maxX: 95, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[1].y - 2 },
       ];
     } else {
       enemies = [];
@@ -905,6 +964,17 @@
     '╱╳╲',
   ];
   const GHOST_COLORS = ['#dfeaff', '#9fb8e0', '#5870a0'];
+
+  // UFO — 5 wide × 2 rows tall, two-frame light-blink.
+  const UFO_A = [
+    ' ╭─╮ ',
+    '◢███◣',
+  ];
+  const UFO_B = [
+    ' ╭─╮ ',
+    '◣███◢',
+  ];
+  const UFO_COLORS = ['#a8e0ff', '#7fc8ff'];
 
   // Snowman boss — 5 wide × 4 rows tall, two-frame bob/blink.
   const SNOWMAN_A = [
@@ -1399,6 +1469,9 @@
                      bass:  ['A1','A1','F2','F2','C3','C3','E3','E3'] },
     4: { tempo: 132, notes: ['E4','G4','B4','E5','D5','B4','G4','E4','F4','A4','C5','F5','E5','C5','A4','F4'],
                      bass:  ['E2','E2','G2','G2','A2','A2','D3','D3'] },
+    // Deep Space — slow, drifting fifths with sparse high triangle notes.
+    5: { tempo: 64,  notes: ['REST','E4','REST','G4','REST','B4','REST','D5','REST','C5','REST','A4','REST','G4','REST','E4'],
+                     bass:  ['E2','E2','G2','G2','A2','A2','C3','C3'] },
   };
   let musicTrack = null;
   let musicStep = 0, musicBassStep = 0;
@@ -1529,8 +1602,9 @@
     if (n === 1) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 2) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 3) return { x: 12, y: FLOORS[0].y - 3, floorIdx: 0 };
-    // n === 4 (snow boss): player starts on the new 4th (bottom) floor.
-    return            { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
+    if (n === 4) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
+    // n === 5 (space): start on the bottom-left platform.
+    return            { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
   }
 
   function respawnPlayer() {
@@ -1701,7 +1775,8 @@
 
       // Sitting / jumping
       if (jump && onGround) {
-        player.vy = PHYS.jumpV;
+        const jMul = PHYS_OVERRIDES[screen] ? PHYS_OVERRIDES[screen].jumpVMul : 1;
+        player.vy = PHYS.jumpV * jMul;
         player.state = 'jump';
         jumpSound();
       } else if (down && onGround && !moving) {
@@ -1725,8 +1800,9 @@
         }
       }
 
-      // Gravity
-      if (!onGround) player.vy = clamp(player.vy + PHYS.gravity * dt, -100, PHYS.maxFall);
+      // Gravity (some screens have reduced gravity for floaty movement).
+      const gMul = PHYS_OVERRIDES[screen] ? PHYS_OVERRIDES[screen].gravityMul : 1;
+      if (!onGround) player.vy = clamp(player.vy + PHYS.gravity * gMul * dt, -100, PHYS.maxFall);
 
       // Apply velocity
       const prevY = player.y;
@@ -1805,20 +1881,70 @@
     if (GOAL === 'defeat-snowman' && gameState === 'playing') {
       const alive = enemies.some(e => e.type === 'snowman' && e.hp > 0);
       if (!alive) {
-        // Boss down — final win!
+        // Boss down — onward to the space level.
+        GOAL = 'transit';
+        setTimeout(winSound, 200);
+        setTimeout(() => advanceScreen(), 900);
+      }
+    }
+    // Black-hole goal (space level): walking into the hole's bounding
+    // box ends the game.
+    if (GOAL === 'reach-blackhole' && BLACKHOLE && gameState === 'playing') {
+      const pcx = player.x + 1, pcy = player.y + 1.5;
+      if (pcx >= BLACKHOLE.x && pcx <= BLACKHOLE.x + BLACKHOLE.w &&
+          pcy >= BLACKHOLE.y && pcy <= BLACKHOLE.y + BLACKHOLE.h) {
         GOAL = 'won';
         setTimeout(winSound, 200);
+        spawnParticles(player.x + 1, player.y + 1, {
+          count: 60, colors: ['#ffd56b','#c060e0','#7fc8ff','#ffffff'],
+          chars: ['✦','★','✧','·','+','*'],
+        });
         setTimeout(() => {
           gameState = 'won';
           if (safeOpened) {
             overlayText.textContent = 'PERFECT VICTORY! ★';
-            overlaySub.textContent = 'You befriended a dog and defeated the boss';
+            overlaySub.textContent = 'You crossed the event horizon — click to play again';
           } else {
             overlayText.textContent = 'YOU WIN!';
-            overlaySub.textContent = 'The snowman is defeated — click to play again';
+            overlaySub.textContent = 'The black hole takes you — click to play again';
           }
           overlay.classList.remove('hidden');
         }, 900);
+      }
+    }
+    // Teleporters (space level): stepping onto a portal whisks you off.
+    if (TELEPORTS.length) {
+      if (teleCooldown > 0) teleCooldown -= dt;
+      if (teleCooldown <= 0) {
+        for (const t of TELEPORTS) {
+          if (player.floorIdx !== t.floorIdx) continue;
+          if (Math.abs((player.x + 1) - t.x) < 2) {
+            // Pick a random different teleporter and warp to it.
+            const others = TELEPORTS.filter(o => o !== t);
+            const dest = others[(Math.random() * others.length) | 0];
+            if (dest) {
+              const dFloor = FLOORS[dest.floorIdx];
+              if (dFloor) {
+                spawnParticles(player.x + 1, player.y + 1, {
+                  count: 30, colors: ['#7fc8ff','#c060e0','#ffffff'],
+                  chars: ['*','·','✦','+'],
+                });
+                player.x = dest.x - 1;
+                player.y = dFloor.y - 3;
+                player.floorIdx = dest.floorIdx;
+                player.vx = 0; player.vy = 0;
+                blip(900, 0.10, 'square', 0.06, 1400);
+                setTimeout(() => blip(1320, 0.12, 'triangle', 0.05), 90);
+                spawnParticles(player.x + 1, player.y + 1, {
+                  count: 30, colors: ['#7fc8ff','#c060e0','#ffffff'],
+                  chars: ['*','·','✦','+'],
+                });
+                teleCooldown = 0.6;     // brief grace so we don't ping-pong
+              }
+            }
+            break;
+          }
+        }
       }
     }
 
@@ -2023,6 +2149,12 @@
         e.phase += dt * e.pSpeed;
         e.x = e.cx + Math.cos(e.phase) * e.rx - 1;
         e.y = e.cy + Math.sin(e.phase * 1.4) * e.ry;
+        e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
+      } else if (e.type === 'ufo') {
+        // Drifts on a stretched elliptic path, gently bobbing.
+        e.phase += dt * e.pSpeed;
+        e.x = e.cx + Math.cos(e.phase) * e.rx - 2;
+        e.y = e.cy + Math.sin(e.phase * 1.8) * e.ry;
         e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
       } else if (e.type === 'snowman') {
         updateSnowman(e, dt);
@@ -2422,6 +2554,47 @@
         const tw = 0.5 + 0.5 * Math.sin(s.phase + time * 1.5);
         putChar(s.x | 0, s.y | 0, s.ch, `rgba(220,235,255,${0.25 + tw * 0.4})`);
       }
+
+    } else if (screen === 5) {
+      // ── Outer space: deep gradient + drifting nebula clouds.
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0,    '#03050d');
+      grad.addColorStop(0.4,  '#0d0a26');
+      grad.addColorStop(0.75, '#1c0e3a');
+      grad.addColorStop(1,    '#040810');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Two soft nebula clouds
+      const neb = (cx, cy, r, c1, c2) => {
+        const gx = cx * CHAR_W, gy = cy * CHAR_H;
+        const rPx = r * CHAR_W;
+        const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, rPx);
+        g.addColorStop(0, c1);
+        g.addColorStop(1, c2);
+        ctx.fillStyle = g;
+        ctx.fillRect(gx - rPx, gy - rPx, rPx * 2, rPx * 2);
+      };
+      neb( 50 + Math.sin(time * 0.1) * 4, 25, 40, 'rgba(120, 60,200,0.28)', 'rgba(0,0,0,0)');
+      neb(150 + Math.cos(time * 0.08) * 3, 40, 36, 'rgba( 60,120,200,0.22)', 'rgba(0,0,0,0)');
+      neb(110, 14, 28, 'rgba(200,80,160,0.18)', 'rgba(0,0,0,0)');
+
+      // All the stars twinkle out here.
+      for (const s of STARS) {
+        const tw = 0.5 + 0.5 * Math.sin(s.phase + time * 2);
+        const r = 200 + Math.floor(tw * 55);
+        const g = 220 + Math.floor(tw * 35);
+        putChar(s.x | 0, s.y | 0, s.ch, `rgba(${r},${g},255,${0.4 + tw * 0.6})`);
+      }
+      // Extra cluster down low
+      for (let i = 0; i < STARS.length; i++) {
+        const s = STARS[i];
+        const ly = (s.y + 30) | 0;
+        if (ly < ROWS - 2) {
+          const tw = 0.5 + 0.5 * Math.sin(s.phase + time * 1.3 + i);
+          putChar(s.x | 0, ly, s.ch, `rgba(255,240,220,${0.20 + tw * 0.35})`);
+        }
+      }
     }
   }
 
@@ -2564,6 +2737,11 @@
     } else if (screen === 4) {
       drawMountains(6, 8, 0.06, '#6a7a9a', '#4a5878');
       drawFarTreesAt(11, 0.15, '#3a4458');
+    } else if (screen === 5) {
+      // Space — only a faint mountain-shaped silhouette for very distant
+      // asteroid belts.  Real backdrop is the nebula in drawSky().
+      drawMountains(54, 56, 0.04, 'rgba(120, 90,180,0.18)', 'rgba(60, 40,120,0.18)');
+      drawFarTreesAt(65, 0.10, 'rgba(80, 60,120,0.20)');
     }
   }
 
@@ -2707,6 +2885,10 @@
       const a = (((time * 4) | 0) % 2) === 0;
       sprite = a ? GHOST_A : GHOST_B;
       colors = GHOST_COLORS;
+    } else if (e.type === 'ufo') {
+      const a = (((time * 6) | 0) % 2) === 0;
+      sprite = a ? UFO_A : UFO_B;
+      colors = UFO_COLORS;
     } else if (e.type === 'snowman') {
       const a = ((e.walk | 0) % 2) === 0;
       sprite = a ? SNOWMAN_A : SNOWMAN_B;
@@ -2804,6 +2986,7 @@
       else if (theme === 'cloud')  { topColor = '#e8efff'; shadowColor = '#8a9ec8'; capColor = '#6680b0'; }
       else if (theme === 'stone')  { topColor = '#9aa0aa'; shadowColor = '#4a4e58'; capColor = '#5a5e68'; }
       else if (theme === 'snow')   { topColor = '#ffffff'; shadowColor = '#6d8aad'; capColor = '#9fb4cd'; }
+      else if (theme === 'space')  { topColor = '#a8b6e0'; shadowColor = '#3a3858'; capColor = '#6a78a8'; }
       else                          { topColor = '#caa070'; shadowColor = '#704830'; capColor = '#7a5a32'; }
       // Platform top
       for (let x = left; x <= right; x++) {
@@ -2816,6 +2999,8 @@
           grain = ((x * 7 + i * 31) % 11) === 0 ? '╬' : ((x * 7 + i * 31) % 5 === 0 ? '▓' : '▀');
         } else if (theme === 'snow') {
           grain = ((x * 7 + i * 31) % 11) === 0 ? '▓' : ((x + i) % 4 === 0 ? '▒' : '▀');
+        } else if (theme === 'space') {
+          grain = ((x * 7 + i * 31) % 13) === 0 ? '╳' : ((x + i) % 3 === 0 ? '▰' : '━');
         } else {
           grain = ((x * 7 + i * 31) % 13) === 0 ? '═' : '━';
         }
@@ -2831,6 +3016,8 @@
         } else if (theme === 'stone') {
           ch = ((x + i) % 5 === 0) ? '▓' : ((x + i) % 5 === 2 ? '▒' : '░');
         } else if (theme === 'snow') {
+          ch = ((x + i) % 5 === 0) ? '▒' : ((x + i) % 5 === 2 ? '░' : ' ');
+        } else if (theme === 'space') {
           ch = ((x + i) % 5 === 0) ? '▒' : ((x + i) % 5 === 2 ? '░' : ' ');
         } else {
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
@@ -3018,6 +3205,58 @@
       putChar(cx - 1, f.y - 1, '∧', '#ffd56b');
       putChar(cx + 1, f.y - 1, '∧', '#ffd56b');
     }
+  }
+
+  function drawTeleports(time) {
+    for (const t of TELEPORTS) {
+      const yTop = t.y - 3;
+      const swirl = ['◇','◈','◆','◈'][((time * 6) | 0) % 4];
+      const colors = ['#7fc8ff','#c060e0','#ffd56b','#7fc8ff'];
+      const col = colors[((time * 4) | 0) % 4];
+      putString(t.x - 1, yTop,     '╔═╗', '#7fc8ff');
+      putString(t.x - 1, yTop + 1, '║' + swirl + '║', col);
+      putString(t.x - 1, yTop + 2, '╚═╝', '#7fc8ff');
+      // Sparkles above
+      if ((((time * 5) | 0) % 3) === 0) putChar(t.x + ((Math.random() * 3) | 0) - 1, yTop - 1, '·', '#c060e0');
+    }
+  }
+
+  function drawBlackHole(time) {
+    if (!BLACKHOLE) return;
+    const cx = BLACKHOLE.x + BLACKHOLE.w / 2;
+    const cy = BLACKHOLE.y + BLACKHOLE.h / 2;
+    // Wide soft glow
+    const gx = cx * CHAR_W, gy = cy * CHAR_H;
+    const r1 = CHAR_W * 16;
+    const halo = ctx.createRadialGradient(gx, gy, 0, gx, gy, r1);
+    halo.addColorStop(0,   'rgba(180,100,220,0.55)');
+    halo.addColorStop(0.4, 'rgba( 80, 40,160,0.35)');
+    halo.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(gx - r1, gy - r1, r1 * 2, r1 * 2);
+    // Black core
+    const r2 = CHAR_W * 4;
+    const core = ctx.createRadialGradient(gx, gy, 0, gx, gy, r2);
+    core.addColorStop(0,   '#000000');
+    core.addColorStop(0.7, '#0a0210');
+    core.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = core;
+    ctx.fillRect(gx - r2, gy - r2, r2 * 2, r2 * 2);
+    // Swirling accretion ring (rotating chars on a circle)
+    const ringR = 5;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + time * 1.5;
+      const px = Math.round(cx + Math.cos(a) * ringR * 1.4);
+      const py = Math.round(cy + Math.sin(a) * ringR * 0.9);
+      const ch = ['·','*','✦','✧','+'][i % 5];
+      const cc = i % 3 === 0 ? '#ffd56b' : (i % 3 === 1 ? '#c060e0' : '#7fc8ff');
+      putChar(px, py, ch, cc);
+    }
+    // Centre eye
+    putChar(Math.round(cx), Math.round(cy), '●', '#000');
+    // Caption
+    const caption = '◀ BLACK HOLE';
+    putString(BLACKHOLE.x - 1, BLACKHOLE.y - 1, caption, '#c060e0');
   }
 
   function drawSafe(time) {
@@ -3234,6 +3473,10 @@
 
     if (screen === 0) drawFireflies(time);
     if (screen === 2) drawAutojumpHints(time);
+    if (screen === 5) {
+      drawBlackHole(time);
+      drawTeleports(time);
+    }
 
     drawChest();
     drawKey(time);
@@ -3277,12 +3520,12 @@
   }
 
   function drawScreenLabel() {
-    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS'];
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE'];
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c4';
+    const v = 'c5';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
