@@ -56,14 +56,22 @@ html, body {
   flex-direction: column;
   gap: 4px;
   padding: 6px 8px 8px 8px;
-  background: rgba(15, 18, 30, 0.92);
+  background: rgba(15, 18, 30, 0.96);
   border-top: 1px solid #28304a;
   border-bottom: 1px solid #28304a;
   font-size: 11px;
   letter-spacing: 0.05em;
   color: #c8ccd4;
-  position: relative;
-  z-index: 20;
+  /* Absolute-position so opening the menu never shifts the canvas
+     down — the panel floats over the playfield instead.  JS keeps
+     `top` glued to the bottom of the HUD on every resize. */
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 40px;
+  z-index: 30;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-radius: 0 0 4px 4px;
 }
 .cheat-panel.hidden { display: none; }
 .cheat-row {
@@ -103,6 +111,9 @@ html, body {
 
 #overlay {
   position: absolute;
+  /* Default insets, but fitToWindow() pins these to match the canvas
+     exactly so the overlay fully covers the play area regardless of
+     HUD height / wrap. */
   inset: 36px 6px 0 6px;
   display: flex;
   align-items: center;
@@ -113,6 +124,7 @@ html, body {
   backdrop-filter: blur(2px);
   text-align: center;
   cursor: pointer;
+  z-index: 15;
 }
 #overlay.hidden { display: none; }
 #overlayText {

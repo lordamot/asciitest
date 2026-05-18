@@ -40,6 +40,20 @@
     canvas.width  = Math.floor(COLS * CHAR_W);
     canvas.height = Math.floor(ROWS * CHAR_H);
     applyCtxState();
+    // Pin the cheat panel directly below the HUD so opening it
+    // doesn't shift the canvas; pin the overlay to the canvas so it
+    // fully covers the playfield with no uncovered top row.
+    const cp = document.getElementById('cheatPanel');
+    if (cp && hudEl) cp.style.top = (hudEl.offsetTop + hudEl.offsetHeight) + 'px';
+    const ov = document.getElementById('overlay');
+    if (ov && canvas) {
+      ov.style.top    = canvas.offsetTop    + 'px';
+      ov.style.left   = canvas.offsetLeft   + 'px';
+      ov.style.width  = canvas.offsetWidth  + 'px';
+      ov.style.height = canvas.offsetHeight + 'px';
+      ov.style.right  = 'auto';
+      ov.style.bottom = 'auto';
+    }
   }
   fitToWindow();
   window.addEventListener('resize', fitToWindow);
@@ -2027,6 +2041,8 @@
       // Mark active button briefly
       document.querySelectorAll('.cheat-lv.active').forEach(o => o.classList.remove('active'));
       b.classList.add('active');
+      // Any option click closes the panel.
+      setCheatPanelOpen(false);
     });
   });
   if (infLivesBtn) {
@@ -2038,6 +2054,7 @@
       else infLivesBtn.classList.remove('active');
       // Top up the player's lives the moment infinite gets enabled.
       if (infiniteLives) player.lives = player.maxLives;
+      setCheatPanelOpen(false);
     });
   }
   function cheatJumpToLevel(n) {
@@ -2074,6 +2091,13 @@
     overlay.classList.add('hidden');
     gameState = 'playing';
   });
+  // Auto-close the cheat menu whenever the overlay (menu / game-over /
+  // win) becomes visible.
+  if (overlay && typeof MutationObserver !== 'undefined') {
+    new MutationObserver(() => {
+      if (!overlay.classList.contains('hidden')) setCheatPanelOpen(false);
+    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  }
 
   function spawnPosFor(n) {
     if (n === 0) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
@@ -2694,6 +2718,51 @@
         e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
       } else if (e.type === 'agent') {
         updateAgent(e, dt);
+      }
+    }
+    // Safety net: any living enemy whose position has drifted off the
+    // visible playfield (bad floor lookup, clamp slip, etc.) is snapped
+    // back onto its assigned floor.  This guarantees creatures that
+    // weren't killed cannot silently disappear.
+    for (const e of enemies) {
+      if (e.hp <= 0) continue;
+      const w = e.w || 3, h = e.h || 3;
+      // Clamp horizontal bounds to the canvas.
+      if (e.x < -w + 1) e.x = 0;
+      if (e.x > COLS - 1) e.x = COLS - w;
+      // If the enemy has a known floor, keep its y locked to it.
+      const tied = (e.type === 'snowman' || e.type === 'tiger' ||
+                    e.type === 'demon'   || e.type === 'agent'  ||
+                    e.type === 'angel'   || e.type === 'skel'   ||
+                    e.type === 'slime');
+      if (tied && e.floorIdx >= 0) {
+        const f = FLOORS[e.floorIdx];
+        if (f) {
+          // Only correct y if we're not mid-flight / mid-climb.
+          const flying = e.climbing || e.flying ||
+                         (e.teleportState && e.teleportState !== 'idle');
+          if (!flying) {
+            const restY = f.y - h;
+            if (Math.abs(e.y - restY) > 6) e.y = restY;
+            // Clamp into the floor segment when not actively crossing one.
+            if (e.x < f.left - 0.5) e.x = f.left;
+            else if (e.x + w > f.right + 1.5) e.x = f.right - w + 1;
+          }
+        } else if (e.floorY !== undefined) {
+          // Lost our floor reference — find another segment at our y.
+          const fb = FLOORS.find(fl => fl.y === e.floorY);
+          if (fb) e.floorIdx = FLOORS.indexOf(fb);
+        }
+      }
+      // Last-ditch: if the enemy somehow ended up below the screen,
+      // tether back to whatever floor exists.
+      if (e.y > ROWS + 4) {
+        const f = FLOORS[e.floorIdx] || FLOORS[FLOORS.length - 1];
+        if (f) e.y = f.y - h;
+      }
+      if (e.y < -h - 4) {
+        const f = FLOORS[e.floorIdx] || FLOORS[0];
+        if (f) e.y = f.y - h;
       }
     }
     // Cull dead enemies whose fade-out finished.
@@ -4699,7 +4768,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'd2';
+    const v = 'd3';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
