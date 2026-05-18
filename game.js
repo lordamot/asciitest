@@ -1962,6 +1962,9 @@
       return;
     }
     if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Spacebar'].includes(k)) e.preventDefault();
+    if (k === 'Escape') {
+      if (cheatPanel && !cheatPanel.classList.contains('hidden')) setCheatPanelOpen(false);
+    }
     if (k === ' ' && !keys[' ']) jumpQueued = true;
     if (ATTACK_KEYS.has(k) && !keys[k]) attackQueued = true;
     if ((k === 'e' || k === 'E') && !keys[k]) interactQueued = true;
@@ -1998,11 +2001,20 @@
   const cheatBtn   = document.getElementById('cheatBtn');
   const cheatPanel = document.getElementById('cheatPanel');
   const infLivesBtn = document.getElementById('infLivesBtn');
+  function setCheatPanelOpen(open) {
+    if (!cheatBtn || !cheatPanel) return;
+    if (open) {
+      cheatPanel.classList.remove('hidden');
+      cheatBtn.textContent = 'CLOSE ▴';
+    } else {
+      cheatPanel.classList.add('hidden');
+      cheatBtn.textContent = '▾';
+    }
+  }
   if (cheatBtn && cheatPanel) {
     cheatBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      cheatPanel.classList.toggle('hidden');
-      cheatBtn.textContent = cheatPanel.classList.contains('hidden') ? '▾' : '▴';
+      setCheatPanelOpen(cheatPanel.classList.contains('hidden'));
     });
   }
   // Level-jump buttons
@@ -2200,10 +2212,14 @@
       if (up)   player.vy = -PHYS.climbSpeed;
       if (down) player.vy =  PHYS.climbSpeed;
       if (left || right) {
-        // Hop off ladder onto nearest floor
+        // Drop straight down off the ladder — no horizontal motion in
+        // the air until the player lands.
         player.onLadder = false;
-        player.state = 'stand';
+        player.state = 'jump';
         player.facing = left ? -1 : 1;
+        player.vx = 0;
+        player.vy = 0.1;
+        player.fromLadder = true;
       }
       player.y += player.vy * dt;
       // Climb step sound
@@ -2241,8 +2257,12 @@
       }
     } else {
       // ── HORIZONTAL MOVEMENT ───────────────────────────────────────
+      // While dropping straight down off a ladder, ignore horizontal
+      // input until the player has actually landed.
       let moving = false;
-      if (left  && !right) { player.vx = -PHYS.walkSpeed; player.facing = -1; moving = true; }
+      if (player.fromLadder) {
+        player.vx = 0;
+      } else if (left  && !right) { player.vx = -PHYS.walkSpeed; player.facing = -1; moving = true; }
       else if (right && !left) { player.vx =  PHYS.walkSpeed; player.facing =  1; moving = true; }
       else { player.vx = 0; }
 
@@ -2296,6 +2316,7 @@
           player.vy = 0;
           player.floorIdx = i;
           player.onBoat = !!f.isBoat;
+          player.fromLadder = false;
           if (player.state === 'jump') { player.state = 'stand'; landSound(); }
           // Autojump pad: bounce the player upward immediately on landing.
           if (f.autojump) {
@@ -2711,13 +2732,15 @@
     return best;
   }
 
-  const ANGEL_WALK = 19.2;     // 80% of player walk (24)
-  const ANGEL_FLY = 24;
+  // All three late-game bosses move at 70% of the player's walk speed.
+  const BOSS_WALK_70 = 24 * 0.70;     // = 16.8 cells/sec
+  const ANGEL_WALK = BOSS_WALK_70;
+  const ANGEL_FLY = 22;
   const ANGEL_FLIGHT_COOLDOWN = 3.0;   // grace window for the player to escape
 
-  // Matrix agent — 90% of player walk, climbs ladders, teleports.
-  const AGENT_WALK = 21.6;
-  const AGENT_CLIMB = 16;
+  // Matrix agent — same 70% walk speed; still teleports.
+  const AGENT_WALK = BOSS_WALK_70;
+  const AGENT_CLIMB = 14;
   const AGENT_TELEPORT_COOLDOWN = 40.0;
   const AGENT_FADE_TIME = 2.4;
   const AGENT_ASSEMBLE_TIME = 2.4;
@@ -2929,9 +2952,11 @@
     // Tigers + Agents reuse this routine with their own speeds.
     const WALK_SPEED  = s.type === 'tiger' ? TIGER_WALK
                        : s.type === 'agent' ? AGENT_WALK
+                       : s.type === 'demon' ? BOSS_WALK_70
                        : SNOWMAN_WALK;
     const CLIMB_SPEED = s.type === 'tiger' ? TIGER_CLIMB
                        : s.type === 'agent' ? AGENT_CLIMB
+                       : s.type === 'demon' ? 14
                        : SNOWMAN_CLIMB;
     // While climbing, just move vertically.
     if (s.climbing) {
@@ -3202,15 +3227,16 @@
             chars: ['❄','*','✦','·','+'],
           });
         } else {
-          // Counter-punch — knock the dog away and stun it.
+          // Counter-punch — the dog gets knocked silly but stays put at
+          // the exact spot where it bit.  Stun timer freezes movement;
+          // grounded:true keeps gravity from dragging it down.
           dog.stunned = DOG_STUN_DURATION;
           dog.stunPhase = 0;
           dog.climbing = null;
           dog.targetLadder = null;
-          const dir = (dog.x + 2.5) < (snowman.x + snowman.w / 2) ? -1 : 1;
-          dog.vx = dir * 40;
-          dog.vy = -22;
-          dog.grounded = false;
+          dog.vx = 0;
+          dog.vy = 0;
+          dog.grounded = true;
           blip(120, 0.30, 'sawtooth', 0.07, 60);
           noiseBurst(0.10, 0.06);
           spawnParticles(dog.x + 2, dog.y, {
@@ -4673,7 +4699,7 @@
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'd1';
+    const v = 'd2';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
