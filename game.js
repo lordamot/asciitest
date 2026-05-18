@@ -91,7 +91,7 @@
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
   let GOAL = null;      // win-or-advance objective for the current screen
   let screen = 0;
-  const NUM_SCREENS = 7;
+  const NUM_SCREENS = 8;
   // Per-screen physics overrides (only space tweaks gravity for now).
   const PHYS_OVERRIDES = { 5: { gravityMul: 0.45, jumpVMul: 0.85 } };
   // Space-level mechanics
@@ -140,6 +140,7 @@
     TELEPORTS = [];
     BLACKHOLE = null;
     teleCooldown = 0;
+    PROJECTILES.length = 0;
     KEY = null;
     CHEST = null;
     POTION = null;
@@ -466,7 +467,36 @@
       KEY   = { x: 160, floorIdx: 0, collected: false };
       // Optional healing potion mid-climb.
       POTION = { x: 100, floorIdx: 2, collected: false };
-      GOAL = 'final-key';
+      // Jungle now advances to the volcano boss arena instead of
+      // ending the game.
+      GOAL = 'pickup-key';
+
+    } else if (n === 7) {
+      // ───── Screen 7: Volcano lair — fire-demon boss, lava floor.
+      setFloors([
+        { y: 12, left: 2,  right: 196, theme: 'lava' },   // 0 top (demon starts)
+        { y: 28, left: 2,  right: 196, theme: 'lava' },   // 1
+        { y: 44, left: 2,  right: 196, theme: 'lava' },   // 2
+        { y: 60, left: 2,  right: 196, theme: 'lava' },   // 3 bottom (player starts)
+      ]);
+      LADDERS = [
+        { x: 48,  top: 12, bottom: 28 },
+        { x: 152, top: 12, bottom: 28 },
+        { x: 30,  top: 28, bottom: 44 },
+        { x: 112, top: 28, bottom: 44 },
+        { x: 174, top: 28, bottom: 44 },
+        { x: 64,  top: 44, bottom: 60 },
+        { x: 138, top: 44, bottom: 60 },
+        { x: 186, top: 44, bottom: 60 },
+      ];
+      TREES = [];
+      BUSHES = [];
+      ROCKS = [
+        { x: 16, floorIdx: 3 }, { x: 92, floorIdx: 3 }, { x: 180, floorIdx: 3 },
+        { x: 60, floorIdx: 2 }, { x: 158, floorIdx: 2 },
+        { x: 30, floorIdx: 1 }, { x: 160, floorIdx: 1 },
+      ];
+      GOAL = 'defeat-demon';
     }
 
     // Player starting position (shared with respawnPlayer())
@@ -791,6 +821,29 @@
           x: 98, y: 20, phase: 0, pSpeed: 0.8, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
+    } else if (n === 7) {
+      // Volcano boss arena — the fire demon and a couple of bat helpers.
+      enemies = [
+        // Boss
+        { type: 'demon',
+          x: 140, y: FLOORS[0].y - 4,
+          vx: 0, facing: -1,
+          hp: 12, maxHp: 12, hurt: 0, dead: 0,
+          w: 5, h: 4,
+          floorIdx: 0, floorY: FLOORS[0].y,
+          climbing: null, targetFloorIdx: -1, targetFloorY: 0,
+          walk: 0, repath: 0,
+          shootCool: 2.0,
+          shootPhase: 0,
+        },
+        // Helper bat-ghosts patrolling between floors
+        { type: 'ghost', cx: 60, cy: 36, rx: 30, ry: 10,
+          x: 58, y: 36, phase: 0, pSpeed: 1.2, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+        { type: 'ghost', cx: 140, cy: 22, rx: 30, ry: 8,
+          x: 138, y: 22, phase: Math.PI, pSpeed: 1.4, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+      ];
     } else {
       enemies = [];
     }
@@ -870,6 +923,7 @@
     4: '#1a1a22',   // snow: stark ravens
     5: '#c8a8ff',   // space: faint glowing things
     6: '#ff6a3a',   // jungle: vivid parrots
+    7: '#ff8a30',   // volcano: ember-bright cinderbirds
   };
   const BIRD_FRAMES = ['/V\\', '_v_'];
   // Drifting leaves shed from trees.  Per-tree rate is tied to wind phase.
@@ -1109,6 +1163,24 @@
     '\\▓▓▓/',
   ];
   const TIGER_COLORS = ['#ffa040', '#ffd56b', '#c87020'];
+
+  // Fire-demon boss — 5×4, two-frame mouth animation.
+  const DEMON_A = [
+    ' ʌ ʌ ',
+    '(◉ ◉)',
+    '(─v─)',
+    '╱▓▓▓╲',
+  ];
+  const DEMON_B = [
+    ' ʌ ʌ ',
+    '(◉ ◉)',
+    '(─^─)',
+    '╲▓▓▓╱',
+  ];
+  const DEMON_COLORS = ['#c01020', '#ffd000', '#ff6a30', '#a01020'];
+
+  // Projectiles fired by the demon (and any future ranged enemy).
+  const PROJECTILES = [];
 
   // Dog companion — 2 rows × 4 wide.  Right-facing; mirror for left.
   const DOG_R = [
@@ -1593,6 +1665,9 @@
     // Jungle — rhythmic minor groove (tribal vibe).
     6: { tempo: 116, notes: ['A3','REST','C4','E4','A3','REST','G3','E4','D4','REST','F4','A4','D4','REST','C4','A3'],
                      bass:  ['A2','A2','D3','D3','F2','F2','E2','E2'] },
+    // Volcano — relentless minor-key boss theme.
+    7: { tempo: 144, notes: ['D4','F4','A4','D5','C5','A4','F4','D4','Eb4','G4','Bb4','Eb5','D5','Bb4','G4','Eb4'],
+                     bass:  ['D2','D2','F2','F2','G2','G2','A2','A2'] },
   };
   let musicTrack = null;
   let musicStep = 0, musicBassStep = 0;
@@ -1725,7 +1800,8 @@
     if (n === 3) return { x: 12, y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 4) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
     if (n === 5) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
-    // n === 6 (jungle): start on the bottom floor.
+    if (n === 6) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
+    // n === 7 (volcano boss): bottom floor.
     return            { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
   }
 
@@ -1799,6 +1875,7 @@
     updateBackground(dt);
     updatePlatforms(dt);
     updateEnemies(dt);
+    updateProjectiles(dt);
     updateDog(dt);
     updateSnowflakes(dt);
 
@@ -2007,6 +2084,25 @@
         GOAL = 'transit';
         setTimeout(winSound, 200);
         setTimeout(() => advanceScreen(), 900);
+      }
+    }
+    if (GOAL === 'defeat-demon' && gameState === 'playing') {
+      const alive = enemies.some(e => e.type === 'demon' && e.hp > 0);
+      if (!alive) {
+        // Final boss down — game wins for real this time.
+        GOAL = 'won';
+        setTimeout(winSound, 200);
+        setTimeout(() => {
+          gameState = 'won';
+          if (safeOpened) {
+            overlayText.textContent = 'PERFECT VICTORY! ★';
+            overlaySub.textContent = 'You vanquished the fire demon — click to play again';
+          } else {
+            overlayText.textContent = 'YOU WIN!';
+            overlaySub.textContent = 'The demon is defeated — click to play again';
+          }
+          overlay.classList.remove('hidden');
+        }, 900);
       }
     }
     // Black-hole goal (space level): walking into the hole's bounding
@@ -2272,6 +2368,9 @@
         updateSnowman(e, dt);
       } else if (e.type === 'tiger') {
         updateSnowman(e, dt);
+      } else if (e.type === 'demon') {
+        updateSnowman(e, dt);
+        updateDemonShooting(e, dt);
       }
     }
     // Cull dead enemies whose fade-out finished.
@@ -2308,6 +2407,87 @@
       if (d < bestDx) { bestDx = d; best = l; }
     }
     return best;
+  }
+
+  function updateDemonShooting(d, dt) {
+    if (d.climbing) return;
+    d.shootCool -= dt;
+    d.shootPhase = (d.shootPhase || 0) + dt;
+    if (d.shootCool <= 0) {
+      // Fire a homing-ish fireball toward where the player is right now.
+      const fromX = d.x + d.w / 2;
+      const fromY = d.y + d.h / 2;
+      const tx = player.x + 1.5;
+      const ty = player.y + 1.5;
+      const dxp = tx - fromX, dyp = ty - fromY;
+      const dist = Math.sqrt(dxp * dxp + dyp * dyp) || 1;
+      const speed = 36;
+      PROJECTILES.push({
+        x: fromX, y: fromY,
+        vx: (dxp / dist) * speed,
+        vy: (dyp / dist) * speed - 4,    // small upward arc
+        life: 2.6, age: 0,
+        spinPhase: 0,
+        owner: 'demon',
+      });
+      d.facing = Math.sign(dxp) || d.facing;
+      d.shootCool = 2.2 + Math.random() * 1.2;
+      // Sound: deep whoosh
+      blip(140, 0.18, 'sawtooth', 0.06, 60);
+      noiseBurst(0.06, 0.04);
+    }
+  }
+
+  function updateProjectiles(dt) {
+    for (let i = PROJECTILES.length - 1; i >= 0; i--) {
+      const p = PROJECTILES[i];
+      p.age += dt;
+      p.spinPhase += dt * 10;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 14 * dt;                  // mild gravity (fireball arcs)
+      // Player collision (sphere around player centre)
+      if (player.invul <= 0 && !player.dead) {
+        const cdx = (player.x + 1.5) - p.x;
+        const cdy = (player.y + 1.5) - p.y;
+        if (cdx * cdx + cdy * cdy < 4.5) {
+          player.hp -= 1;
+          player.invul = PLAYER_INVUL;
+          player.hurtFlash = 0.25;
+          hurtSound();
+          spawnParticles(p.x, p.y, { count: 16,
+            colors: ['#ff6a30','#ffd56b','#ffffff'], chars: ['*','+','✦','×'] });
+          PROJECTILES.splice(i, 1);
+          continue;
+        }
+      }
+      // Floor collision → splash and disappear
+      let hitFloor = false;
+      for (const f of FLOORS) {
+        if (p.x + 1 >= f.left && p.x + 1 <= f.right + 1 && p.y >= f.y - 0.5 && p.y <= f.y + 1) {
+          hitFloor = true; break;
+        }
+      }
+      if (hitFloor || p.age > p.life || p.x < -2 || p.x > COLS + 2 || p.y > ROWS) {
+        spawnParticles(p.x, p.y, { count: 8,
+          colors: ['#ff6a30','#ffd56b'], chars: ['*','+','·'] });
+        PROJECTILES.splice(i, 1);
+      }
+    }
+  }
+
+  function drawProjectiles(time) {
+    for (const p of PROJECTILES) {
+      const spin = (p.spinPhase | 0) % 4;
+      const ch = ['◉','●','◎','◍'][spin];
+      const px = Math.floor(p.x), py = Math.floor(p.y);
+      // Brief trail behind it
+      const tx = Math.floor(p.x - Math.sign(p.vx));
+      putChar(tx, py, '·', '#ff9a3a');
+      putChar(px, py, ch, '#ffd56b');
+      // Outer flame ring sparkle
+      if (((p.spinPhase | 0) % 2) === 0) putChar(px, py - 1, '✦', '#ff6a30');
+    }
   }
 
   function updateSnowman(s, dt) {
@@ -2845,6 +3025,33 @@
         ctx.fillStyle = lg;
         ctx.fillRect(gx - 6, 0, 12, canvas.height);
       }
+
+    } else if (screen === 7) {
+      // ── Volcano lair: dark sky with rising heat glow at the bottom.
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0,    '#1a0a08');
+      grad.addColorStop(0.5,  '#3a1208');
+      grad.addColorStop(0.85, '#a02808');
+      grad.addColorStop(1,    '#ffaa30');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Heat shimmer band near the bottom — animated by alpha sin.
+      const heat = ctx.createLinearGradient(0, (ROWS - 6) * CHAR_H, 0, canvas.height);
+      const a = 0.18 + 0.10 * Math.sin(time * 4);
+      heat.addColorStop(0, 'rgba(255,140,40,0)');
+      heat.addColorStop(1, `rgba(255,200,80,${a.toFixed(3)})`);
+      ctx.fillStyle = heat;
+      ctx.fillRect(0, (ROWS - 6) * CHAR_H, canvas.width, 6 * CHAR_H);
+
+      // Embers rising — derived from STARS so we don't keep another pool.
+      for (let i = 0; i < STARS.length; i++) {
+        const s = STARS[i];
+        const ey = ROWS - 2 - ((s.phase * 6 + time * 8) % (ROWS - 2));
+        const ex = (s.x + Math.sin(time * 2 + i * 0.7) * 1.2) | 0;
+        const a2 = 0.4 + 0.3 * Math.sin(time * 3 + i);
+        putChar(ex, ey | 0, i % 2 === 0 ? '·' : '*', `rgba(255,200,80,${a2.toFixed(2)})`);
+      }
     }
   }
 
@@ -3002,6 +3209,17 @@
         drawOrnamentLayer(ORN_VINE, yStart, yEnd, 0.10, 'rgba(40, 90,50,0.22)');
         drawOrnamentLayer(ORN_MID,  yStart, yEnd, 0.18, 'rgba(20, 70,40,0.18)');
       }
+    } else if (screen === 7) {
+      // Volcano: jagged cracked-rock pattern in warm tones between floors.
+      const fy = FLOORS.map(f => f.y);
+      for (let i = 0; i < fy.length - 1; i++) {
+        const yStart = fy[i] + 2;
+        const yEnd   = fy[i + 1] - 1;
+        if (yEnd <= yStart) continue;
+        drawOrnamentLayer(ORN_FAR,  yStart, yEnd, 0.03, 'rgba(80, 30, 20,0.30)');
+        drawOrnamentLayer(ORN_VINE, yStart, yEnd, 0.10, 'rgba(120,40, 10,0.20)');
+        drawOrnamentLayer(ORN_MID,  yStart, yEnd, 0.18, 'rgba(180,80, 30,0.18)');
+      }
     }
   }
 
@@ -3031,6 +3249,10 @@
       // Jungle — distant misty hill silhouettes + lush near treeline.
       drawMountains(6, 8, 0.05, '#2a4a30', '#163020');
       drawFarTreesAt(15, 0.15, '#0f3018');
+    } else if (screen === 7) {
+      // Volcano — distant volcano cones + a closer ridge.
+      drawMountains(8, 10, 0.05, '#5a1a08', '#2a0a04');
+      drawFarTreesAt(15, 0.14, '#1a0604');
     }
   }
 
@@ -3187,6 +3409,10 @@
       sprite = a ? TIGER_A : TIGER_B;
       if (e.facing === -1) sprite = mirror(sprite);
       colors = TIGER_COLORS;
+    } else if (e.type === 'demon') {
+      const a = (((time * 3) | 0) % 2) === 0;
+      sprite = a ? DEMON_A : DEMON_B;
+      colors = DEMON_COLORS;
     }
     // Dead enemies fade and shake (until culled)
     if (e.hp <= 0) {
@@ -3281,6 +3507,7 @@
       else if (theme === 'stone')  { topColor = '#9aa0aa'; shadowColor = '#4a4e58'; capColor = '#5a5e68'; }
       else if (theme === 'snow')   { topColor = '#ffffff'; shadowColor = '#6d8aad'; capColor = '#9fb4cd'; }
       else if (theme === 'space')  { topColor = '#a8b6e0'; shadowColor = '#3a3858'; capColor = '#6a78a8'; }
+      else if (theme === 'lava')   { topColor = '#3a1a10'; shadowColor = '#180806'; capColor = '#5a1a08'; }
       else                          { topColor = '#caa070'; shadowColor = '#704830'; capColor = '#7a5a32'; }
       // Platform top
       for (let x = left; x <= right; x++) {
@@ -3295,6 +3522,8 @@
           grain = ((x * 7 + i * 31) % 11) === 0 ? '▓' : ((x + i) % 4 === 0 ? '▒' : '▀');
         } else if (theme === 'space') {
           grain = ((x * 7 + i * 31) % 13) === 0 ? '╳' : ((x + i) % 3 === 0 ? '▰' : '━');
+        } else if (theme === 'lava') {
+          grain = ((x * 7 + i * 31) % 11) === 0 ? '╳' : ((x + i) % 3 === 0 ? '▓' : '━');
         } else {
           grain = ((x * 7 + i * 31) % 13) === 0 ? '═' : '━';
         }
@@ -3313,6 +3542,8 @@
           ch = ((x + i) % 5 === 0) ? '▒' : ((x + i) % 5 === 2 ? '░' : ' ');
         } else if (theme === 'space') {
           ch = ((x + i) % 5 === 0) ? '▒' : ((x + i) % 5 === 2 ? '░' : ' ');
+        } else if (theme === 'lava') {
+          ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
         } else {
           ch = ((x + i) % 4 === 0) ? '▓' : ((x + i) % 4 === 2 ? '▒' : '░');
         }
@@ -3799,6 +4030,7 @@
 
     // Enemies behind player so player passes in front during overlap.
     for (const e of enemies) drawEnemy(e, time);
+    drawProjectiles(time);
 
     drawDog(time);
     drawPlayer(time);
@@ -3830,12 +4062,12 @@
   }
 
   function drawScreenLabel() {
-    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE', 'LV.7  JUNGLE'];
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE', 'LV.7  JUNGLE', 'LV.8  VOLCANO LAIR'];
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c7';
+    const v = 'c8';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
