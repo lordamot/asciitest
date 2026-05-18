@@ -91,7 +91,7 @@
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
   let GOAL = null;      // win-or-advance objective for the current screen
   let screen = 0;
-  const NUM_SCREENS = 6;
+  const NUM_SCREENS = 7;
   // Per-screen physics overrides (only space tweaks gravity for now).
   const PHYS_OVERRIDES = { 5: { gravityMul: 0.45, jumpVMul: 0.85 } };
   // Space-level mechanics
@@ -412,6 +412,61 @@
       // Black hole zone at the top-right corner (8 wide × 8 tall).
       BLACKHOLE = { x: 168, y: 2, w: 14, h: 10 };
       GOAL = 'reach-blackhole';
+
+    } else if (n === 6) {
+      // ───── Screen 6: Jungle forest — final stretch.
+      setFloors([
+        { y: 10, left: 2,  right: 196, theme: 'wood-light' },  // 0 top
+        { y: 26, left: 2,  right: 196, theme: 'wood-mid'   },  // 1
+        { y: 42, left: 2,  right: 196, theme: 'wood-mid'   },  // 2
+        { y: 60, left: 2,  right: 196, theme: 'wood-dark'  },  // 3 bottom (player starts)
+      ]);
+      // Lianas — same mechanics as ladders but rendered as hanging vines.
+      LADDERS = [
+        { x: 28,  top: 10, bottom: 26, vine: true },
+        { x: 92,  top: 10, bottom: 26, vine: true },
+        { x: 162, top: 10, bottom: 26, vine: true },
+        { x: 44,  top: 26, bottom: 42, vine: true },
+        { x: 116, top: 26, bottom: 42, vine: true },
+        { x: 178, top: 26, bottom: 42, vine: true },
+        { x: 22,  top: 42, bottom: 60, vine: true },
+        { x: 86,  top: 42, bottom: 60, vine: true },
+        { x: 150, top: 42, bottom: 60, vine: true },
+      ];
+      // Dense canopy.
+      TREES = [
+        { x: 12,  floorIdx: 3, kind: 'round' },
+        { x: 60,  floorIdx: 3, kind: 'pine'  },
+        { x: 110, floorIdx: 3, kind: 'round' },
+        { x: 170, floorIdx: 3, kind: 'pine'  },
+        { x: 188, floorIdx: 3, kind: 'round' },
+        { x: 14,  floorIdx: 2, kind: 'pine'  },
+        { x: 70,  floorIdx: 2, kind: 'round' },
+        { x: 138, floorIdx: 2, kind: 'pine'  },
+        { x: 190, floorIdx: 2, kind: 'round' },
+        { x: 10,  floorIdx: 1, kind: 'round' },
+        { x: 76,  floorIdx: 1, kind: 'pine'  },
+        { x: 140, floorIdx: 1, kind: 'round' },
+        { x: 30,  floorIdx: 0, kind: 'round' },
+        { x: 108, floorIdx: 0, kind: 'pine'  },
+        { x: 188, floorIdx: 0, kind: 'round' },
+      ];
+      BUSHES = [
+        { x: 32, floorIdx: 3 }, { x: 80, floorIdx: 3 }, { x: 140, floorIdx: 3 }, { x: 184, floorIdx: 3 },
+        { x: 38, floorIdx: 2 }, { x: 102, floorIdx: 2 }, { x: 168, floorIdx: 2 },
+        { x: 56, floorIdx: 1 }, { x: 156, floorIdx: 1 },
+        { x: 70, floorIdx: 0 }, { x: 168, floorIdx: 0 },
+      ];
+      ROCKS = [
+        { x: 92, floorIdx: 3 }, { x: 158, floorIdx: 3 },
+        { x: 50, floorIdx: 2 }, { x: 150, floorIdx: 2 },
+      ];
+      // Chest + key at the top floor (final objective).
+      CHEST = { x: 150, floorIdx: 0 };
+      KEY   = { x: 160, floorIdx: 0, collected: false };
+      // Optional healing potion mid-climb.
+      POTION = { x: 100, floorIdx: 2, collected: false };
+      GOAL = 'final-key';
     }
 
     // Player starting position (shared with respawnPlayer())
@@ -688,6 +743,41 @@
           floorIdx: 1, minX: 70, maxX: 95, hop: 0, hurt: 0, dead: 0,
           w: 5, h: 2, originY: FLOORS[1].y - 2 },
       ];
+    } else if (n === 6) {
+      // Jungle — two tigers (chase the player at 85% of player speed,
+      // 3 HP each), plus a couple of regular jungle critters.
+      enemies = [
+        { type: 'tiger',
+          x: 40, y: FLOORS[3].y - 3,
+          vx: 0, facing: 1,
+          hp: 3, maxHp: 3, hurt: 0, dead: 0,
+          w: 5, h: 3,
+          floorIdx: 3, floorY: FLOORS[3].y,
+          climbing: null, targetFloorIdx: -1, targetFloorY: 0,
+          walk: 0, repath: 0,
+        },
+        { type: 'tiger',
+          x: 160, y: FLOORS[2].y - 3,
+          vx: 0, facing: -1,
+          hp: 3, maxHp: 3, hurt: 0, dead: 0,
+          w: 5, h: 3,
+          floorIdx: 2, floorY: FLOORS[2].y,
+          climbing: null, targetFloorIdx: -1, targetFloorY: 0,
+          walk: 0, repath: 0,
+        },
+        // A patrolling snake (skel sprite for lack of a snake one)
+        { type: 'skel', x: 80, y: FLOORS[1].y - 3, vx: -9, facing: -1, hp: 2, maxHp: 2,
+          floorIdx: 1, minX: 30, maxX: 170, walk: 0, hurt: 0, dead: 0,
+          w: 3, h: 3, originY: FLOORS[1].y - 3 },
+        // Hopping toad (slime)
+        { type: 'slime', x: 100, y: FLOORS[3].y - 2, vx: 6, facing: 1, hp: 1, maxHp: 1,
+          floorIdx: 3, minX: 60, maxX: 180, hop: 0, hurt: 0, dead: 0,
+          w: 5, h: 2, originY: FLOORS[3].y - 2 },
+        // Parrot (ghost-style float)
+        { type: 'ghost', cx: 100, cy: 20, rx: 40, ry: 6,
+          x: 98, y: 20, phase: 0, pSpeed: 0.8, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
+      ];
     } else {
       enemies = [];
     }
@@ -765,6 +855,8 @@
     2: '#ffd56b',   // sky: yellow finches
     3: '#4a4458',   // cave: faint shadows (rare)
     4: '#1a1a22',   // snow: stark ravens
+    5: '#c8a8ff',   // space: faint glowing things
+    6: '#ff6a3a',   // jungle: vivid parrots
   };
   const BIRD_FRAMES = ['/V\\', '_v_'];
   // Drifting leaves shed from trees.  Per-tree rate is tied to wind phase.
@@ -991,6 +1083,19 @@
   ];
   const SNOWMAN_COLORS = ['#4a5070', '#cad8e8', '#1a1a22', '#cad8e8'];
   const SNOWMAN_HURT_COLORS = ['#4a5070', '#ff5070', '#ff5070', '#ff5070'];
+
+  // Tiger — 5 wide × 3 rows, two-frame leg shuffle.
+  const TIGER_A = [
+    ' ʌ ʌ ',
+    '(°ω°)',
+    '/▓▓▓\\',
+  ];
+  const TIGER_B = [
+    ' ʌ ʌ ',
+    '(°ω°)',
+    '\\▓▓▓/',
+  ];
+  const TIGER_COLORS = ['#ffa040', '#ffd56b', '#c87020'];
 
   // Dog companion — 2 rows × 4 wide.  Right-facing; mirror for left.
   const DOG_R = [
@@ -1472,6 +1577,9 @@
     // Deep Space — slow, drifting fifths with sparse high triangle notes.
     5: { tempo: 64,  notes: ['REST','E4','REST','G4','REST','B4','REST','D5','REST','C5','REST','A4','REST','G4','REST','E4'],
                      bass:  ['E2','E2','G2','G2','A2','A2','C3','C3'] },
+    // Jungle — rhythmic minor groove (tribal vibe).
+    6: { tempo: 116, notes: ['A3','REST','C4','E4','A3','REST','G3','E4','D4','REST','F4','A4','D4','REST','C4','A3'],
+                     bass:  ['A2','A2','D3','D3','F2','F2','E2','E2'] },
   };
   let musicTrack = null;
   let musicStep = 0, musicBassStep = 0;
@@ -1603,8 +1711,9 @@
     if (n === 2) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 3) return { x: 12, y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 4) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
-    // n === 5 (space): start on the bottom-left platform.
-    return            { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
+    if (n === 5) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
+    // n === 6 (jungle): start on the bottom floor.
+    return            { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
   }
 
   function respawnPlayer() {
@@ -1893,23 +2002,13 @@
       const pcx = player.x + 1, pcy = player.y + 1.5;
       if (pcx >= BLACKHOLE.x && pcx <= BLACKHOLE.x + BLACKHOLE.w &&
           pcy >= BLACKHOLE.y && pcy <= BLACKHOLE.y + BLACKHOLE.h) {
-        GOAL = 'won';
-        setTimeout(winSound, 200);
+        // Cross the event horizon → drop into the jungle (next screen).
+        GOAL = 'transit';
         spawnParticles(player.x + 1, player.y + 1, {
           count: 60, colors: ['#ffd56b','#c060e0','#7fc8ff','#ffffff'],
           chars: ['✦','★','✧','·','+','*'],
         });
-        setTimeout(() => {
-          gameState = 'won';
-          if (safeOpened) {
-            overlayText.textContent = 'PERFECT VICTORY! ★';
-            overlaySub.textContent = 'You crossed the event horizon — click to play again';
-          } else {
-            overlayText.textContent = 'YOU WIN!';
-            overlaySub.textContent = 'The black hole takes you — click to play again';
-          }
-          overlay.classList.remove('hidden');
-        }, 900);
+        setTimeout(() => advanceScreen(), 700);
       }
     }
     // Teleporters (space level): stepping onto a portal whisks you off.
@@ -2158,6 +2257,8 @@
         e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
       } else if (e.type === 'snowman') {
         updateSnowman(e, dt);
+      } else if (e.type === 'tiger') {
+        updateSnowman(e, dt);
       }
     }
     // Cull dead enemies whose fade-out finished.
@@ -2174,8 +2275,11 @@
   // ───────────────────────────────────────────────────────────────────────
   //  SNOWMAN BOSS AI  (walks toward player, climbs ladders to follow)
   // ───────────────────────────────────────────────────────────────────────
-  const SNOWMAN_WALK = 14;        // cells/sec — slower than the player (12)
+  const SNOWMAN_WALK = 14;        // cells/sec — slower than the player (24)
   const SNOWMAN_CLIMB = 10;
+  // Tiger speeds: 85% of the player's 24 cells/sec walk = 20.4.
+  const TIGER_WALK = 20.4;
+  const TIGER_CLIMB = 16;
 
   function findLadderNear(x, fromFloorIdx, wantTopY) {
     // Find a ladder at this floor whose other end is wantTopY.
@@ -2194,12 +2298,15 @@
   }
 
   function updateSnowman(s, dt) {
+    // Tigers reuse this routine with their own speeds.
+    const WALK_SPEED  = s.type === 'tiger' ? TIGER_WALK  : SNOWMAN_WALK;
+    const CLIMB_SPEED = s.type === 'tiger' ? TIGER_CLIMB : SNOWMAN_CLIMB;
     // While climbing, just move vertically.
     if (s.climbing) {
       const dir = s.climbing === 'up' ? -1 : 1;
-      s.y += dir * SNOWMAN_CLIMB * dt;
+      s.y += dir * CLIMB_SPEED * dt;
       // Done?
-      const targetY = s.targetFloorY - 4;
+      const targetY = s.targetFloorY - (s.h || 4);
       const reached = (dir < 0 && s.y <= targetY) || (dir > 0 && s.y >= targetY);
       if (reached) {
         s.y = targetY;
@@ -2213,7 +2320,7 @@
     // Otherwise: walking on current floor.  Sit on the floor and chase.
     const f = FLOORS[s.floorIdx];
     if (!f) return;
-    s.y = f.y - 4;
+    s.y = f.y - (s.h || 4);
     s.floorY = f.y;
 
     const playerFloor = FLOORS[player.floorIdx];
@@ -2256,7 +2363,7 @@
     // Walk toward target x
     const dx = s.targetX - s.x;
     if (Math.abs(dx) > 0.5) {
-      s.vx = Math.sign(dx) * SNOWMAN_WALK;
+      s.vx = Math.sign(dx) * WALK_SPEED;
       s.facing = Math.sign(dx);
       s.x += s.vx * dt;
       s.walk += dt * 5;
@@ -2595,6 +2702,27 @@
           putChar(s.x | 0, ly, s.ch, `rgba(255,240,220,${0.20 + tw * 0.35})`);
         }
       }
+
+    } else if (screen === 6) {
+      // ── Jungle: lush greens with a misty top canopy.
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0,    '#10301a');
+      grad.addColorStop(0.5,  '#1a4828');
+      grad.addColorStop(1,    '#0a200f');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Light shafts piercing the canopy from above.
+      for (let i = 0; i < 6; i++) {
+        const x = ((i * 33 + Math.floor(time * 4)) % 200);
+        const gx = x * CHAR_W;
+        const lg = ctx.createLinearGradient(gx, 0, gx, canvas.height);
+        lg.addColorStop(0,   'rgba(220,255,180,0.10)');
+        lg.addColorStop(0.6, 'rgba(160,210,140,0.05)');
+        lg.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = lg;
+        ctx.fillRect(gx - 6, 0, 12, canvas.height);
+      }
     }
   }
 
@@ -2717,6 +2845,17 @@
         drawOrnamentLayer(ORN_MID,  yStart, yEnd, 0.10, 'rgba(150,180,210,0.12)');
         drawOrnamentLayer(ORN_VINE, yStart, yEnd, 0.16, 'rgba(120,160,200,0.08)');
       }
+    } else if (screen === 6) {
+      // Jungle: dense foliage parallax tier wallpaper.
+      const fy = FLOORS.map(f => f.y);
+      for (let i = 0; i < fy.length - 1; i++) {
+        const yStart = fy[i] + 2;
+        const yEnd   = fy[i + 1] - 1;
+        if (yEnd <= yStart) continue;
+        drawOrnamentLayer(ORN_FAR,  yStart, yEnd, 0.03, 'rgba(50,110,60,0.30)');
+        drawOrnamentLayer(ORN_VINE, yStart, yEnd, 0.10, 'rgba(40, 90,50,0.22)');
+        drawOrnamentLayer(ORN_MID,  yStart, yEnd, 0.18, 'rgba(20, 70,40,0.18)');
+      }
     }
   }
 
@@ -2742,6 +2881,10 @@
       // asteroid belts.  Real backdrop is the nebula in drawSky().
       drawMountains(54, 56, 0.04, 'rgba(120, 90,180,0.18)', 'rgba(60, 40,120,0.18)');
       drawFarTreesAt(65, 0.10, 'rgba(80, 60,120,0.20)');
+    } else if (screen === 6) {
+      // Jungle — distant misty hill silhouettes + lush near treeline.
+      drawMountains(6, 8, 0.05, '#2a4a30', '#163020');
+      drawFarTreesAt(15, 0.15, '#0f3018');
     }
   }
 
@@ -2893,6 +3036,11 @@
       const a = ((e.walk | 0) % 2) === 0;
       sprite = a ? SNOWMAN_A : SNOWMAN_B;
       colors = SNOWMAN_COLORS;
+    } else if (e.type === 'tiger') {
+      const a = ((e.walk | 0) % 2) === 0;
+      sprite = a ? TIGER_A : TIGER_B;
+      if (e.facing === -1) sprite = mirror(sprite);
+      colors = TIGER_COLORS;
     }
     // Dead enemies fade and shake (until culled)
     if (e.hp <= 0) {
@@ -3032,6 +3180,22 @@
 
   function drawLadders() {
     for (const L of LADDERS) {
+      if (L.vine) {
+        // Hanging liana — twisted rope with sparse leaf clusters.
+        const sway = Math.round(Math.sin(windPhase + L.x * 0.4) * 0.5);
+        for (let r = L.top; r < L.bottom; r++) {
+          const wob = Math.round(Math.sin(windPhase * 1.2 + r * 0.3) * 0.6);
+          const xL = L.x - 1 + wob;
+          const xR = L.x + 1 + wob;
+          putChar(xL, r, '╲', '#3a7a32');
+          putChar(xR, r, '╱', '#3a7a32');
+          if ((r - L.top) % 3 === 1) putChar(L.x + wob, r, '╳', '#5fa64a');
+          else if ((r - L.top) % 5 === 2) putChar(L.x + wob, r, '♣', '#4ec46f');
+        }
+        // Anchor knot at the top
+        putChar(L.x + sway, L.top, '◯', '#3a7a32');
+        continue;
+      }
       for (let r = L.top; r < L.bottom; r++) {
         putChar(L.x - 1, r, '║', '#b58952');
         putChar(L.x + 1, r, '║', '#b58952');
@@ -3520,12 +3684,12 @@
   }
 
   function drawScreenLabel() {
-    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE'];
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE', 'LV.7  JUNGLE'];
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c5';
+    const v = 'c6';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
