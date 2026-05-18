@@ -91,7 +91,7 @@
   let MOV_PLATS = [];   // screen 2: list of moving platforms (also live in FLOORS)
   let GOAL = null;      // win-or-advance objective for the current screen
   let screen = 0;
-  const NUM_SCREENS = 8;
+  const NUM_SCREENS = 9;
   // Per-screen physics overrides (only space tweaks gravity for now).
   const PHYS_OVERRIDES = { 5: { gravityMul: 0.45, jumpVMul: 0.85 } };
   // Space-level mechanics
@@ -497,6 +497,37 @@
         { x: 30, floorIdx: 1 }, { x: 160, floorIdx: 1 },
       ];
       GOAL = 'defeat-demon';
+
+    } else if (n === 8) {
+      // ───── Screen 8: Heavens — partial floors with holes; two angels.
+      setFloors([
+        // Floor y=12 (top), single segment with the goal area.
+        { y: 12, left: 20,  right: 180, theme: 'cloud' },                       // 0
+        // Floor y=28 split into two with a wide hole at the middle.
+        { y: 28, left: 2,   right: 90,  theme: 'cloud' },                       // 1
+        { y: 28, left: 110, right: 196, theme: 'cloud' },                       // 2
+        // Floor y=44 split into three pieces with two holes.
+        { y: 44, left: 2,   right: 80,  theme: 'cloud' },                       // 3
+        { y: 44, left: 100, right: 150, theme: 'cloud' },                       // 4
+        { y: 44, left: 170, right: 196, theme: 'cloud' },                       // 5
+        // Bottom: solid runway.
+        { y: 60, left: 2,   right: 196, theme: 'cloud' },                       // 6
+      ]);
+      LADDERS = [
+        { x: 40,  top: 12, bottom: 28 },   // 0  → 1
+        { x: 150, top: 12, bottom: 28 },   // 0  → 2
+        { x: 50,  top: 28, bottom: 44 },   // 1  → 3
+        { x: 130, top: 28, bottom: 44 },   // 2  → 4
+        { x: 180, top: 28, bottom: 44 },   // 2  → 5
+        { x: 20,  top: 44, bottom: 60 },   // 3  → 6
+        { x: 120, top: 44, bottom: 60 },   // 4  → 6
+        { x: 185, top: 44, bottom: 60 },   // 5  → 6
+      ];
+      TREES = [];
+      BUSHES = [];
+      ROCKS = [];
+      POTION = { x: 50, floorIdx: 6, collected: false };
+      GOAL = 'defeat-angels';
     }
 
     // Player starting position (shared with respawnPlayer())
@@ -844,6 +875,38 @@
           x: 138, y: 22, phase: Math.PI, pSpeed: 1.4, hp: 1, maxHp: 1,
           facing: 1, hurt: 0, dead: 0, w: 3, h: 3 },
       ];
+    } else if (n === 8) {
+      // Heaven — two angel bosses and a flock of cherubs.
+      enemies = [
+        { type: 'angel',
+          x: 40, y: FLOORS[1].y - 4,
+          vx: 0, facing: -1,
+          hp: 6, maxHp: 6, hurt: 0, dead: 0,
+          w: 5, h: 4,
+          floorIdx: 1, floorY: FLOORS[1].y,
+          flying: false, targetFloorIdx: -1, targetFloorY: 0,
+          flightCool: 0, walk: 0, wing: 0,
+        },
+        { type: 'angel',
+          x: 178, y: FLOORS[5].y - 4,
+          vx: 0, facing: 1,
+          hp: 6, maxHp: 6, hurt: 0, dead: 0,
+          w: 5, h: 4,
+          floorIdx: 5, floorY: FLOORS[5].y,
+          flying: false, targetFloorIdx: -1, targetFloorY: 0,
+          flightCool: 1.0, walk: 0, wing: 0,
+        },
+        // Cherub helpers (1 HP, ghost-float)
+        { type: 'cherub', cx: 80,  cy: 20, rx: 22, ry: 4,
+          x: 78, y: 20, phase: 0, pSpeed: 1.1, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 2 },
+        { type: 'cherub', cx: 130, cy: 36, rx: 26, ry: 4,
+          x: 128, y: 36, phase: Math.PI / 2, pSpeed: 1.3, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 2 },
+        { type: 'cherub', cx: 60,  cy: 50, rx: 30, ry: 3,
+          x: 58, y: 50, phase: Math.PI, pSpeed: 0.9, hp: 1, maxHp: 1,
+          facing: 1, hurt: 0, dead: 0, w: 3, h: 2 },
+      ];
     } else {
       enemies = [];
     }
@@ -924,6 +987,7 @@
     5: '#c8a8ff',   // space: faint glowing things
     6: '#ff6a3a',   // jungle: vivid parrots
     7: '#ff8a30',   // volcano: ember-bright cinderbirds
+    8: '#ffe888',   // heaven: golden doves
   };
   const BIRD_FRAMES = ['/V\\', '_v_'];
   // Drifting leaves shed from trees.  Per-tree rate is tied to wind phase.
@@ -1178,6 +1242,26 @@
     '╲▓▓▓╱',
   ];
   const DEMON_COLORS = ['#c01020', '#ffd000', '#ff6a30', '#a01020'];
+
+  // Angel boss — 5 wide × 4 rows, wing-flap animation.
+  const ANGEL_A = [
+    '  ◯  ',
+    ' ◔◔  ',
+    '╲▓▓▓╱',
+    '  ║  ',
+  ];
+  const ANGEL_B = [
+    '  ◯  ',
+    ' ◔◔  ',
+    '─▓▓▓─',
+    '  ║  ',
+  ];
+  const ANGEL_COLORS = ['#ffe888', '#ffffff', '#ffd56b', '#caa040'];
+
+  // Cherub — small floating angel, 2 rows × 3.
+  const CHERUB_A = [' ◯ ', 'ʕoʔ'];
+  const CHERUB_B = [' ◯ ', 'ʕoʔ'];
+  const CHERUB_COLORS = ['#ffe888', '#ffd56b'];
 
   // Projectiles fired by the demon (and any future ranged enemy).
   const PROJECTILES = [];
@@ -1668,6 +1752,9 @@
     // Volcano — relentless minor-key boss theme.
     7: { tempo: 144, notes: ['D4','F4','A4','D5','C5','A4','F4','D4','Eb4','G4','Bb4','Eb5','D5','Bb4','G4','Eb4'],
                      bass:  ['D2','D2','F2','F2','G2','G2','A2','A2'] },
+    // Heavens — slow choral major triads with airy bass.
+    8: { tempo: 72,  notes: ['C5','E5','G5','C5','D5','F5','A5','D5','E5','G5','B5','E5','D5','F5','A5','D5'],
+                     bass:  ['C3','C3','D3','D3','E3','E3','D3','D3'] },
   };
   let musicTrack = null;
   let musicStep = 0, musicBassStep = 0;
@@ -1801,8 +1888,9 @@
     if (n === 4) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
     if (n === 5) return { x: 8,  y: FLOORS[0].y - 3, floorIdx: 0 };
     if (n === 6) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
-    // n === 7 (volcano boss): bottom floor.
-    return            { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
+    if (n === 7) return { x: 12, y: FLOORS[3].y - 3, floorIdx: 3 };
+    // n === 8 (heaven): the player drops in on the bottom runway.
+    return            { x: 12, y: FLOORS[6].y - 3, floorIdx: 6 };
   }
 
   function respawnPlayer() {
@@ -2089,17 +2177,26 @@
     if (GOAL === 'defeat-demon' && gameState === 'playing') {
       const alive = enemies.some(e => e.type === 'demon' && e.hp > 0);
       if (!alive) {
-        // Final boss down — game wins for real this time.
+        // Demon down — ascend to the heavens.
+        GOAL = 'transit';
+        setTimeout(winSound, 200);
+        setTimeout(() => advanceScreen(), 900);
+      }
+    }
+    if (GOAL === 'defeat-angels' && gameState === 'playing') {
+      const alive = enemies.some(e => e.type === 'angel' && e.hp > 0);
+      if (!alive) {
+        // Both angels defeated — real final win.
         GOAL = 'won';
         setTimeout(winSound, 200);
         setTimeout(() => {
           gameState = 'won';
           if (safeOpened) {
             overlayText.textContent = 'PERFECT VICTORY! ★';
-            overlaySub.textContent = 'You vanquished the fire demon — click to play again';
+            overlaySub.textContent = 'You ascended past the angels — click to play again';
           } else {
             overlayText.textContent = 'YOU WIN!';
-            overlaySub.textContent = 'The demon is defeated — click to play again';
+            overlaySub.textContent = 'The angels are vanquished — click to play again';
           }
           overlay.classList.remove('hidden');
         }, 900);
@@ -2371,6 +2468,14 @@
       } else if (e.type === 'demon') {
         updateSnowman(e, dt);
         updateDemonShooting(e, dt);
+      } else if (e.type === 'angel') {
+        updateAngel(e, dt);
+      } else if (e.type === 'cherub') {
+        // Same float behaviour as a ghost.
+        e.phase += dt * e.pSpeed;
+        e.x = e.cx + Math.cos(e.phase) * e.rx - 1;
+        e.y = e.cy + Math.sin(e.phase * 1.4) * e.ry;
+        e.facing = Math.cos(e.phase) >= 0 ? 1 : -1;
       }
     }
     // Cull dead enemies whose fade-out finished.
@@ -2407,6 +2512,60 @@
       if (d < bestDx) { bestDx = d; best = l; }
     }
     return best;
+  }
+
+  const ANGEL_WALK = 19.2;     // 80% of player walk (24)
+  const ANGEL_FLY = 24;
+  const ANGEL_FLIGHT_COOLDOWN = 3.0;   // grace window for the player to escape
+
+  function updateAngel(a, dt) {
+    if (a.flightCool > 0) a.flightCool -= dt;
+    a.wing = (a.wing || 0) + dt * 7;
+
+    // Mid-flight: only move vertically, ignore everything else.
+    if (a.flying) {
+      const dir = a.targetFloorY < a.y ? -1 : 1;
+      a.y += dir * ANGEL_FLY * dt;
+      const target = a.targetFloorY - (a.h || 4);
+      if ((dir < 0 && a.y <= target) || (dir > 0 && a.y >= target)) {
+        a.y = target;
+        a.floorIdx = a.targetFloorIdx;
+        a.floorY = a.targetFloorY;
+        a.flying = false;
+        a.flightCool = ANGEL_FLIGHT_COOLDOWN;
+      }
+      return;
+    }
+
+    // Snap to whichever floor segment is under the angel right now,
+    // so we always have a sensible floorY to compare against.
+    const fxc = a.x + a.w / 2;
+    let f = FLOORS[a.floorIdx];
+    if (!f || f.y !== a.floorY) {
+      const fb = FLOORS.find(fl => fl.y === a.floorY && fxc >= fl.left && fxc <= fl.right);
+      if (fb) { a.floorIdx = FLOORS.indexOf(fb); f = fb; }
+    }
+    a.y = (f ? f.y : a.floorY) - (a.h || 4);
+
+    // Initiate vertical flight if the player has slipped onto a
+    // different y, but only once the cooldown is up (so the player can
+    // dive through a hole and have a real escape window).
+    const playerFloor = FLOORS[player.floorIdx];
+    if (playerFloor && playerFloor.y !== a.floorY && a.flightCool <= 0) {
+      a.flying = true;
+      a.targetFloorIdx = player.floorIdx;
+      a.targetFloorY = playerFloor.y;
+      return;
+    }
+
+    // Otherwise chase the player horizontally at 80% of player speed.
+    const dxp = (player.x + 1.5) - (a.x + a.w / 2);
+    if (Math.abs(dxp) > 0.5) {
+      a.facing = Math.sign(dxp);
+      a.x += a.facing * ANGEL_WALK * dt;
+      a.walk += dt * 4;
+    }
+    a.x = Math.max(0, Math.min(COLS - a.w, a.x));
   }
 
   function updateDemonShooting(d, dt) {
@@ -3052,6 +3211,38 @@
         const a2 = 0.4 + 0.3 * Math.sin(time * 3 + i);
         putChar(ex, ey | 0, i % 2 === 0 ? '·' : '*', `rgba(255,200,80,${a2.toFixed(2)})`);
       }
+
+    } else if (screen === 8) {
+      // ── Heavens: pearl-and-gold gradient with soft light rays.
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0,    '#fff7d0');
+      grad.addColorStop(0.5,  '#dfeefb');
+      grad.addColorStop(1,    '#b8d4ee');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Sun-burst rays from above
+      const cxp = (COLS / 2) * CHAR_W;
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2 + time * 0.15;
+        const rayLen = canvas.height * 1.2;
+        const ex = cxp + Math.cos(ang) * rayLen;
+        const ey = 0 + Math.sin(ang) * rayLen;
+        const lg = ctx.createLinearGradient(cxp, 0, ex, ey);
+        lg.addColorStop(0,   'rgba(255,245,200,0.10)');
+        lg.addColorStop(0.6, 'rgba(255,245,200,0.04)');
+        lg.addColorStop(1,   'rgba(255,245,200,0)');
+        ctx.fillStyle = lg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      // Sparkles drifting upward — repurposed STARS.
+      for (let i = 0; i < STARS.length; i++) {
+        const s = STARS[i];
+        const ey = ROWS - 4 - ((s.phase * 4 + time * 5) % (ROWS - 4));
+        const ex = (s.x + Math.sin(time * 1.5 + i * 0.5) * 1.0) | 0;
+        const a2 = 0.4 + 0.4 * Math.sin(time * 2 + i);
+        putChar(ex, ey | 0, i % 2 === 0 ? '✦' : '·', `rgba(255,240,150,${a2.toFixed(2)})`);
+      }
     }
   }
 
@@ -3220,6 +3411,11 @@
         drawOrnamentLayer(ORN_VINE, yStart, yEnd, 0.10, 'rgba(120,40, 10,0.20)');
         drawOrnamentLayer(ORN_MID,  yStart, yEnd, 0.18, 'rgba(180,80, 30,0.18)');
       }
+    } else if (screen === 8) {
+      // Heaven: pearly white-gold sparkle pattern fills the whole scene.
+      drawOrnamentLayer(ORN_FAR,  0, ROWS - 1, 0.04, 'rgba(255,255,255,0.55)');
+      drawOrnamentLayer(ORN_MID,  0, ROWS - 1, 0.10, 'rgba(255,235,180,0.40)');
+      drawOrnamentLayer(ORN_VINE, 0, ROWS - 1, 0.18, 'rgba(255,255,255,0.25)');
     }
   }
 
@@ -3253,6 +3449,10 @@
       // Volcano — distant volcano cones + a closer ridge.
       drawMountains(8, 10, 0.05, '#5a1a08', '#2a0a04');
       drawFarTreesAt(15, 0.14, '#1a0604');
+    } else if (screen === 8) {
+      // Heaven — faraway pearl cloud ridges + a closer pillar treeline.
+      drawMountains(8, 10, 0.04, 'rgba(255,255,255,0.55)', 'rgba(220,235,255,0.40)');
+      drawFarTreesAt(15, 0.10, 'rgba(255,235,180,0.40)');
     }
   }
 
@@ -3413,6 +3613,14 @@
       const a = (((time * 3) | 0) % 2) === 0;
       sprite = a ? DEMON_A : DEMON_B;
       colors = DEMON_COLORS;
+    } else if (e.type === 'angel') {
+      const a = (((e.wing || 0) | 0) % 2) === 0;
+      sprite = a ? ANGEL_A : ANGEL_B;
+      colors = ANGEL_COLORS;
+    } else if (e.type === 'cherub') {
+      const a = (((time * 5) | 0) % 2) === 0;
+      sprite = a ? CHERUB_A : CHERUB_B;
+      colors = CHERUB_COLORS;
     }
     // Dead enemies fade and shake (until culled)
     if (e.hp <= 0) {
@@ -4062,12 +4270,12 @@
   }
 
   function drawScreenLabel() {
-    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE', 'LV.7  JUNGLE', 'LV.8  VOLCANO LAIR'];
+    const labels = ['LV.1  NIGHT FOREST', 'LV.2  RIVER CROSSING', 'LV.3  SKY ISLANDS', 'LV.4  CAVE OF SECRETS', 'LV.5  SNOW BOSS', 'LV.6  DEEP SPACE', 'LV.7  JUNGLE', 'LV.8  VOLCANO LAIR', 'LV.9  HEAVENS'];
     const label = labels[screen] || '';
     const col = COLS - label.length - 2;
     for (let i = 0; i < label.length; i++) putChar(col + i, 0, label[i], '#8aa0c0');
     // Build marker (lets you confirm cache-busting worked)
-    const v = 'c8';
+    const v = 'c9';
     for (let i = 0; i < v.length; i++) putChar(COLS - v.length - 1 + i, 1, v[i], '#3a4256');
   }
 
